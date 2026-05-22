@@ -23,8 +23,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, List
 
-from simulation.config import SimConfig
-from simulation.config import (
+from config import SimConfig
+from config import (
     baseline_config,
     alt_better_kitchen,
     alt_expanded_security,

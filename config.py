@@ -5,7 +5,7 @@ Central configuration for the Queuechella festival simulation.
 All magic numbers live here so that alternatives can override them cleanly.
 
 Usage:
-    from simulation.config import SimConfig
+    from config import SimConfig
     cfg = SimConfig()           # baseline
     cfg = SimConfig(photo_stations=4)   # override single param
 """

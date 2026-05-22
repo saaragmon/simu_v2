@@ -8,7 +8,7 @@ Loads sample data from the Excel file and fits distributions for:
 After fitting, returns callable samplers that can be injected into the engine.
 
 Usage:
-    from simulation.distribution_fitting import fit_from_excel
+    from distribution_fitting import fit_from_excel
     samplers = fit_from_excel('samples_for_simulation.xlsx')
     engine = SimulationEngine(
         cfg,
@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from typing import Callable, Dict, List, Optional, Tuple
 
-from simulation.distributions import (
+from distributions import (
     fit_exponential, fit_normal, fit_uniform,
     kolmogorov_smirnov_statistic,
     sample_exponential, sample_normal, sample_continuous_uniform,

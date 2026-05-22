@@ -18,8 +18,8 @@ Class hierarchy:
 from __future__ import annotations
 import random
 from typing import List, Optional
-from simulation.config import SimConfig
-from simulation import distributions as dist
+from config import SimConfig
+import distributions as dist
 
 
 _entity_counter = 0  # Global monotonic ID generator

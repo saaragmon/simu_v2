@@ -29,11 +29,11 @@ from __future__ import annotations
 from collections import deque
 from typing import Deque, List, Optional, Tuple, TYPE_CHECKING
 
-from simulation.config import SimConfig
-from simulation import distributions as dist
+from config import SimConfig
+import distributions as dist
 
 if TYPE_CHECKING:
-    from simulation.entities import Entity
+    from entities import Entity
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -36,17 +36,17 @@ import random
 from collections import deque
 from typing import Dict, List, Optional, Tuple
 
-from simulation.config import SimConfig, FESTIVAL_START, FESTIVAL_END, DAY_DURATION
-from simulation import distributions as dist
-from simulation.entities import (
+from config import SimConfig, FESTIVAL_START, FESTIVAL_END, DAY_DURATION
+import distributions as dist
+from entities import (
     Entity, FriendsGroup, Couple, Single,
     create_entity, reset_entity_counter
 )
-from simulation.events import (
+from events import (
     Event, EventType, make_event, reset_event_counter
 )
-from simulation.stations import Festival, DJStage
-from simulation.statistics import RunStatistics, EntityRecord
+from stations import Festival, DJStage
+from sim_stats import RunStatistics, EntityRecord
 
 
 class SimulationEngine:

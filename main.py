@@ -27,13 +27,13 @@ import time
 # ── Ensure the package root is on sys.path when running from the project folder
 sys.path.insert(0, os.path.dirname(__file__))
 
-from simulation.config        import SimConfig
-from simulation.engine        import SimulationEngine
-from simulation.statistics    import MultiRunStatistics, RunStatistics
-from simulation.alternatives  import (
+from config              import SimConfig
+from engine              import SimulationEngine
+from sim_stats           import MultiRunStatistics, RunStatistics
+from alternatives        import (
     build_baseline, build_combo_a, build_combo_b, ALL_ALTERNATIVES
 )
-from simulation.distribution_fitting import fit_from_excel
+from distribution_fitting import fit_from_excel
 
 
 # ─────────────────────────────────────────────────────────────────────────────
