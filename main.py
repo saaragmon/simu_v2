@@ -1,9 +1,10 @@
 """
 main.py
 =======
-Entry point for the Queuechella Festival Simulation.
+Entry point for the Queuechella Festival Simulation. 
 
 Run this script directly to:
+
     1. Fit distributions from the Excel sample data.
     2. Execute the baseline simulation for the required number of replications.
     3. Run the two alternative scenario combinations.
