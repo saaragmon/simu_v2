@@ -151,6 +151,7 @@ class SimConfig:
     asian_prep_min:         float = 3.0
     asian_prep_max:         float = 7.0
     asian_price:            float = 65.0
+    pizza_family_serves:    int   = 3       # one family platter feeds this many people
 
     # ── Ticket pricing ────────────────────────────────────────────────────────
     ticket_price:           float = 500.0

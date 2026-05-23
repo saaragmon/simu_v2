@@ -4,7 +4,6 @@ main.py
 Entry point for the Queuechella Festival Simulation. 
 
 Run this script directly to:
-
     1. Fit distributions from the Excel sample data.
     2. Execute the baseline simulation for the required number of replications.
     3. Run the two alternative scenario combinations.
@@ -47,6 +46,15 @@ PILOT_RUNS       = 5          # Initial runs used to estimate required replicati
 CONFIDENCE_LEVEL = 0.90
 RELATIVE_PRECISION = 0.10
 KPIS_TO_COMPARE  = ['avg_satisfaction', 'avg_sojourn_min', 'total_revenue']
+
+# Higher value = better outcome for that KPI?
+# avg_sojourn_min is the only KPI where LOWER is better (less time stuck in queues).
+KPI_HIGHER_IS_BETTER = {
+    'avg_satisfaction': True,
+    'avg_sojourn_min':  False,
+    'total_revenue':    True,
+    'total_entities':   True,
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,12 +103,20 @@ def determine_required_runs(pilot_results: MultiRunStatistics,
 def print_comparison(baseline: MultiRunStatistics,
                      alternative: MultiRunStatistics,
                      alt_name: str) -> None:
-    """Print paired t-test results comparing one alternative to the baseline."""
+    """Print paired t-test results comparing one alternative to the baseline.
+
+    The arrow shows whether the alternative is BETTER (↑) or WORSE (↓) than
+    the baseline, taking into account that lower is better for sojourn time.
+    """
     print(f"\n  ─── {alt_name} vs Baseline ───")
     for kpi in KPIS_TO_COMPARE:
         try:
+            # paired_t_test computes diffs = baseline - alt, so t < 0 ⇒ alt is higher
             t_stat, t_crit, reject = baseline.paired_t_test(alternative, kpi)
-            direction = '↑' if t_stat < 0 else '↓'
+            alt_is_higher    = t_stat < 0
+            higher_is_better = KPI_HIGHER_IS_BETTER.get(kpi, True)
+            alt_is_better    = alt_is_higher == higher_is_better
+            direction = '↑ better' if alt_is_better else '↓ worse'
             verdict   = 'SIGNIFICANT' if reject else 'not significant'
             print(f"    {kpi:25s}: t={t_stat:+6.3f}  t_crit={t_crit:.3f}  "
                   f"→ {verdict} {direction if reject else ''}")
@@ -201,10 +217,11 @@ def main(args: argparse.Namespace) -> None:
             base_mean, *_  = baseline_stats.confidence_interval(kpi)
             a_mean, *_     = combo_a_stats.confidence_interval(kpi)
             b_mean, *_     = combo_b_stats.confidence_interval(kpi)
-            best = max([('Baseline', base_mean),
-                        (combo_a_alt.name, a_mean),
-                        (combo_b_alt.name, b_mean)],
-                       key=lambda x: x[1])
+            candidates = [('Baseline', base_mean),
+                          (combo_a_alt.name, a_mean),
+                          (combo_b_alt.name, b_mean)]
+            selector = max if KPI_HIGHER_IS_BETTER.get(kpi, True) else min
+            best = selector(candidates, key=lambda x: x[1])
             print(f"  {kpi:25s}: Best = {best[0]}  ({best[1]:.4f})")
         except Exception:
             pass

@@ -11,6 +11,6 @@ Modules:
     stations        - Station and stage classes
     events          - Event type definitions
     engine          - Core DES engine (priority-queue driven)
-    statistics      - Metrics collection and analysis
+    sim_stats       - Metrics collection and analysis
     alternatives    - Alternative scenario configurations
 """

@@ -18,7 +18,6 @@ Event types:
     STAGE_BREAK_END       – inter-show break is over; next show can start
     STATION_QUEUE_JOIN    – entity joins a service station queue
     STATION_ABANDON       – entity abandons a station queue (patience exceeded)
-    STATION_SERVICE_START – a server becomes free and takes the next entity
     STATION_SERVICE_END   – service at a station completes
     FOOD_QUEUE_JOIN       – entity joins food stall queue
     FOOD_SERVICE_END      – food ordered; entity starts eating
@@ -46,7 +45,6 @@ class EventType(Enum):
     STAGE_BREAK_END       = auto()
     STATION_QUEUE_JOIN    = auto()
     STATION_ABANDON       = auto()
-    STATION_SERVICE_START = auto()
     STATION_SERVICE_END   = auto()
     FOOD_QUEUE_JOIN       = auto()
     FOOD_SERVICE_END      = auto()

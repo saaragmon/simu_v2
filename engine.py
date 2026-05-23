@@ -42,6 +42,7 @@ from entities import (
     Entity, FriendsGroup, Couple, Single,
     create_entity, reset_entity_counter
 )
+from typing import Set
 from events import (
     Event, EventType, make_event, reset_event_counter
 )
@@ -95,6 +96,9 @@ class SimulationEngine:
         # Artist assignment for BodyArt
         self._body_art_artist_map: Dict[int, int] = {}  # entity_id → artist_idx
 
+        # Live entities (not departed) — used for end-of-day overnight decisions
+        self._active_entities: Set[Entity] = set()
+
     # ─────────────────────────────────────────────────────────────────────────
     # Default samplers (placeholders until Excel data is fitted)
     # ─────────────────────────────────────────────────────────────────────────
@@ -118,6 +122,10 @@ class SimulationEngine:
         self.clock   = FESTIVAL_START
         self.heap    = []
         self.stats   = RunStatistics()
+        self._active_entities.clear()
+        self._abandon_events.clear()
+        self._pending_stations.clear()
+        self._body_art_artist_map.clear()
 
         # Re-initialise festival stations
         self.festival = Festival(self.cfg)
@@ -233,7 +241,6 @@ class SimulationEngine:
         elif et == EventType.STAGE_BREAK_END:         self._handle_stage_break_end(event)
         elif et == EventType.STATION_QUEUE_JOIN:      self._handle_station_queue_join(event)
         elif et == EventType.STATION_ABANDON:         self._handle_station_abandon(event)
-        elif et == EventType.STATION_SERVICE_START:   self._handle_station_service_start(event)
         elif et == EventType.STATION_SERVICE_END:     self._handle_station_service_end(event)
         elif et == EventType.FOOD_QUEUE_JOIN:         self._handle_food_queue_join(event)
         elif et == EventType.FOOD_SERVICE_END:        self._handle_food_service_end(event)
@@ -242,6 +249,8 @@ class SimulationEngine:
         elif et == EventType.ALL_STATIONS_DONE:       self._handle_all_stations_done(event)
         elif et == EventType.DAY_END:                 self._handle_day_end(event)
         elif et == EventType.SIM_END:                 self._handle_sim_end(event)
+        else:
+            raise ValueError(f"Unhandled event type: {et}")
 
     # ─────────────────────────────────────────────────────────────────────────
     # Arrival handlers
@@ -253,6 +262,7 @@ class SimulationEngine:
                                event.time,
                                event.data['day'],
                                self.cfg)
+        self._active_entities.add(entity)
         gate = self.festival.entry_gate
         gate.enqueue(entity)
 
@@ -282,7 +292,8 @@ class SimulationEngine:
         if next_entity is not None:
             gate.acquire_server()
             service_time = gate.sample_service_time()
-            self._push(make_event(self.clock, EventType.ENTRY_SERVICE_END,
+            self._push(make_event(self.clock + service_time,
+                                  EventType.ENTRY_SERVICE_END,
                                   next_entity))
 
         # Send entity into the festival
@@ -585,10 +596,6 @@ class SimulationEngine:
             self._push(ab_event)
             self._abandon_events[entity.entity_id] = ab_event
 
-    def _handle_station_service_start(self, event: Event) -> None:
-        """Unused in current design; kept for dispatcher completeness."""
-        pass  # Service start is now inlined in _handle_station_queue_join / _handle_station_service_end
-
     def _handle_station_service_end(self, event: Event) -> None:
         """Service completes; apply outcomes, release server, serve next."""
         station_name = event.data.get('station', '')
@@ -708,15 +715,18 @@ class SimulationEngine:
         entity       = event.entity
         station      = self.festival.get_station(station_name)
 
-        station.enqueue(entity)
-        entity.queue_join_time = self.clock
-
         if station.is_server_available():
+            # Server free → start service immediately, no queuing
             station.acquire_server()
+            self.stats.record_queue_wait(station_name, 0.0)
             service_time = station.sample_order_service_time()
             self._push(make_event(self.clock + service_time,
                                   EventType.FOOD_SERVICE_END,
                                   entity, {'station': station_name}))
+        else:
+            # Server busy → join queue
+            station.enqueue(entity)
+            entity.queue_join_time = self.clock
 
     def _handle_food_service_end(self, event: Event) -> None:
         """Order placed; entity receives food and starts eating."""
@@ -726,24 +736,23 @@ class SimulationEngine:
 
         station.release_server()
 
-        # Record wait + spending
-        wait = self.clock - (entity.queue_join_time or self.clock)
-        self.stats.record_queue_wait(station_name, wait)
+        # Record spending + outcome for the entity that just finished
         cost = station.calculate_meal_cost(entity)
         entity.spending += cost
-
-        # Apply satisfaction outcome
         station.process_outcome(entity)
 
-        # Serve next in queue
+        # Serve next in queue (if any), recording their wait time
         next_entity = station.dequeue()
         if next_entity is not None:
             station.acquire_server()
+            wait = self.clock - (next_entity.queue_join_time or self.clock)
+            self.stats.record_queue_wait(station_name, max(0.0, wait))
+            next_entity.queue_join_time = None
             svc = station.sample_order_service_time()
             self._push(make_event(self.clock + svc, EventType.FOOD_SERVICE_END,
                                   next_entity, {'station': station_name}))
 
-        # Schedule eating time
+        # Schedule eating time for the entity that finished service
         prep_time   = station.sample_prep_time()
         eating_time = station.sample_eating_time()
         self._sched(prep_time + eating_time, EventType.FOOD_EAT_END,
@@ -760,20 +769,42 @@ class SimulationEngine:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _handle_day_end(self, event: Event) -> None:
-        """End of a festival day; handle overnight decisions."""
+        """
+        End of a festival day; handle overnight decisions.
+
+        Day 1: Couples decide based on satisfaction; FriendsGroup uses the
+        `stays_overnight` flag set at creation. Entities that don't stay
+        depart now; those that do continue with day = 2.
+        Singles always depart at end of their day.
+
+        Day 2: Force-depart anyone still in the festival before SIM_END.
+        """
         day = event.data['day']
 
-        if day == 1:
-            # Couples: decide overnight based on satisfaction
-            # (We process entities that are still active — simplified by
-            # tracking them in the statistics' entity_records is not needed here;
-            # instead Couple.should_stay_overnight() was already checked
-            # during routing — entities that would stay overnight are handled
-            # by generating new Couple arrival events for day 2.)
-            pass  # overnight arrivals already scheduled in _schedule_arrivals
+        for entity in list(self._active_entities):
+            if entity.departed or entity.day != day:
+                continue
 
-        if day == 2:
-            pass  # SIM_END will fire shortly
+            if day == 1:
+                if isinstance(entity, Couple):
+                    if entity.should_stay_overnight():
+                        overnight_fee = self.cfg.overnight_price * entity.size
+                        entity.spending += overnight_fee
+                        self.stats.total_revenue += overnight_fee
+                        entity.day = 2
+                        self.stats.num_overnight += 1
+                    else:
+                        self._depart(entity)
+                elif isinstance(entity, FriendsGroup):
+                    if entity.stays_overnight:
+                        entity.day = 2
+                        self.stats.num_overnight += 1
+                    else:
+                        self._depart(entity)
+                else:  # Single
+                    self._depart(entity)
+            else:  # day == 2
+                self._depart(entity)
 
     def _handle_sim_end(self, event: Event) -> None:
         """Simulation complete; flush remaining entities."""
@@ -788,6 +819,7 @@ class SimulationEngine:
         if entity.departed:
             return
         entity.departed = True
+        self._active_entities.discard(entity)
 
         record = EntityRecord(
             entity_id          = entity.entity_id,

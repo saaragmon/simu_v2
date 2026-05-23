@@ -203,7 +203,6 @@ class MerchTent(ServiceStation):
         """
         total = 0.0
         for _ in range(entity.size):
-            u = dist.sample_uniform_01
             if dist.sample_uniform_01() < self.cfg.merch_festival_shirt_prob:
                 total += self.cfg.merch_festival_shirt_price
             if dist.sample_uniform_01() < self.cfg.merch_hat_prob:
@@ -349,9 +348,9 @@ class FoodStall(ServiceStation):
             if entity.entity_type == 'Single':
                 return self.cfg.pizza_individual_price
             else:
-                family_platters = people // self.cfg.__class__.__dict__.get(
-                    'pizza_family_serves', 3)
-                leftover = people % 3
+                serves = self.cfg.pizza_family_serves
+                family_platters = people // serves
+                leftover        = people %  serves
                 return (family_platters * self.cfg.pizza_family_price +
                         leftover * self.cfg.pizza_individual_price)
         elif rt == 'burger':
