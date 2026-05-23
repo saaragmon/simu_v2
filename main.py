@@ -45,13 +45,13 @@ EXCEL_PATH       = os.path.join(os.path.dirname(__file__),
 PILOT_RUNS       = 5          # Initial runs used to estimate required replications
 CONFIDENCE_LEVEL = 0.90
 RELATIVE_PRECISION = 0.10
-KPIS_TO_COMPARE  = ['avg_satisfaction', 'avg_sojourn_min', 'total_revenue']
+KPIS_TO_COMPARE  = ['avg_satisfaction', 'avg_visit_duration', 'total_revenue']
 
 # Higher value = better outcome for that KPI?
-# avg_sojourn_min is the only KPI where LOWER is better (less time stuck in queues).
+# avg_visit_duration is the only KPI where LOWER is better (less time stuck in queues).
 KPI_HIGHER_IS_BETTER = {
     'avg_satisfaction': True,
-    'avg_sojourn_min':  False,
+    'avg_visit_duration':  False,
     'total_revenue':    True,
     'total_entities':   True,
 }
@@ -106,7 +106,7 @@ def print_comparison(baseline: MultiRunStatistics,
     """Print paired t-test results comparing one alternative to the baseline.
 
     The arrow shows whether the alternative is BETTER (↑) or WORSE (↓) than
-    the baseline, taking into account that lower is better for sojourn time.
+    the baseline, taking into account that lower is better for visit duration.
     """
     print(f"\n  ─── {alt_name} vs Baseline ───")
     for kpi in KPIS_TO_COMPARE:

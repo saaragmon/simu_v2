@@ -6,7 +6,7 @@ Metrics collection, aggregation, and statistical analysis for the simulation.
 Collected per-run metrics:
     - Average satisfaction score of all departed entities
     - Average queue wait time per station
-    - Average time spent in the festival (total sojourn)
+    - Average visit duration (time spent in the festival from arrival to departure)
     - Total revenue (ticket + overnight + merch + photo + food)
     - Station utilisation rates
     - Queue abandonment rate
@@ -95,7 +95,7 @@ class RunStatistics:
         return _stats.mean(scores) if scores else 0.0
 
     @property
-    def avg_sojourn_time(self) -> float:
+    def avg_visit_duration(self) -> float:
         times = [r.depart_time - r.arrival_time
                  for r in self.entity_records]
         return _stats.mean(times) if times else 0.0
@@ -133,7 +133,7 @@ class RunStatistics:
         """Return a flat dictionary of key performance indicators."""
         return {
             'avg_satisfaction':   round(self.avg_satisfaction, 4),
-            'avg_sojourn_min':    round(self.avg_sojourn_time, 4),
+            'avg_visit_duration':    round(self.avg_visit_duration, 4),
             'total_entities':     self.total_entities,
             'total_revenue_NIS':  round(self.total_revenue, 2),
             'num_overnight':      self.num_overnight,
@@ -196,13 +196,13 @@ class MultiRunStatistics:
 
     # ── Confidence interval helpers ───────────────────────────────────────────
 
-    def _values(self, kpi: str) -> List[float]:
+    def _kpi_values(self, kpi: str) -> List[float]:
         """Extract per-run scalar values for a given KPI."""
         mapping = {
-            'avg_satisfaction': lambda r: r.avg_satisfaction,
-            'avg_sojourn_min':  lambda r: r.avg_sojourn_time,
-            'total_revenue':    lambda r: r.total_revenue,
-            'total_entities':   lambda r: float(r.total_entities),
+            'avg_satisfaction':   lambda r: r.avg_satisfaction,
+            'avg_visit_duration': lambda r: r.avg_visit_duration,
+            'total_revenue':      lambda r: r.total_revenue,
+            'total_entities':     lambda r: float(r.total_entities),
         }
         if kpi not in mapping:
             raise ValueError(f"Unknown KPI: {kpi}")
@@ -214,7 +214,7 @@ class MultiRunStatistics:
         Uses Student-t confidence interval:
             mean ± t_{alpha/2, n-1} * s / sqrt(n)
         """
-        values = self._values(kpi)
+        values = self._kpi_values(kpi)
         n      = len(values)
         if n < 2:
             raise ValueError("Need at least 2 replications for CI")
@@ -235,7 +235,7 @@ class MultiRunStatistics:
 
         Returns at least `pilot_runs`.
         """
-        values = self._values(kpi)[:pilot_runs]
+        values = self._kpi_values(kpi)[:pilot_runs]
         if len(values) < 2:
             return pilot_runs
         mean_val = _stats.mean(values)
@@ -256,8 +256,8 @@ class MultiRunStatistics:
         Returns (t_statistic, t_critical, reject_H0).
         H0: means are equal.  Reject if |t| > t_crit.
         """
-        vals_a = self._values(kpi)
-        vals_b = other._values(kpi)
+        vals_a = self._kpi_values(kpi)
+        vals_b = other._kpi_values(kpi)
         n = min(len(vals_a), len(vals_b))
         if n < 2:
             raise ValueError("Need at least 2 replications for t-test")
@@ -275,7 +275,7 @@ class MultiRunStatistics:
                  f"  Confidence level: {self.confidence_level*100:.0f}%  "
                  f"  Relative precision: {self.relative_precision*100:.0f}%",
                  f"{'='*60}"]
-        for kpi in ['avg_satisfaction', 'avg_sojourn_min',
+        for kpi in ['avg_satisfaction', 'avg_visit_duration',
                     'total_revenue', 'total_entities']:
             try:
                 mean, lo, hi = self.confidence_interval(kpi)

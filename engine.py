@@ -152,9 +152,9 @@ class SimulationEngine:
     def _push(self, event: Event) -> None:
         heapq.heappush(self.heap, event)
 
-    def _sched(self, dt: float, event_type: EventType,
-               entity: Optional[Entity] = None,
-               data: Optional[dict] = None) -> Event:
+    def _schedule_event(self, dt: float, event_type: EventType,
+                        entity: Optional[Entity] = None,
+                        data: Optional[dict] = None) -> Event:
         """Schedule an event `dt` minutes from now."""
         ev = make_event(self.clock + dt, event_type, entity, data)
         self._push(ev)
@@ -269,7 +269,7 @@ class SimulationEngine:
         if gate.is_server_available():
             gate.acquire_server()
             service_time = gate.sample_service_time()
-            self._sched(service_time, EventType.ENTRY_SERVICE_END, entity)
+            self._schedule_event(service_time, EventType.ENTRY_SERVICE_END, entity)
 
     def _handle_entry_end(self, event: Event) -> None:
         """Entry service done: entity enters festival, server may take next."""
@@ -297,7 +297,7 @@ class SimulationEngine:
                                   next_entity))
 
         # Send entity into the festival
-        self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
+        self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Activity routing
@@ -365,7 +365,7 @@ class SimulationEngine:
             # Couple dislikes DJStage; if somehow scheduled, skip
             if activity == 'DJStage':
                 entity.on_show_completed()
-                self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
+                self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
             else:
                 self._push(make_event(self.clock, EventType.STAGE_QUEUE_JOIN,
                                       entity, {'stage': activity}))
@@ -410,7 +410,7 @@ class SimulationEngine:
         # Notify FriendsGroup that this cycle of stations is done
         if isinstance(entity, FriendsGroup):
             entity.on_all_stations_done()
-        self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
+        self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Stage handlers
@@ -432,7 +432,7 @@ class SimulationEngine:
             if stage.enter(entity):
                 # Entered immediately; schedule departure after sampled duration
                 duration = stage.sample_stay_duration()
-                self._sched(duration, EventType.STAGE_SHOW_END,
+                self._schedule_event(duration, EventType.STAGE_SHOW_END,
                             entity, {'stage': stage_name})
             else:
                 # Full; join queue
@@ -493,7 +493,7 @@ class SimulationEngine:
             back_row = stage.get_back_row_entities()
             if entity in back_row:
                 # Schedule potential early leave
-                self._sched(self.cfg.main_stage_early_leave_delay,
+                self._schedule_event(self.cfg.main_stage_early_leave_delay,
                             EventType.STAGE_EARLY_LEAVE,
                             entity, {'stage': stage_name})
 
@@ -511,7 +511,7 @@ class SimulationEngine:
                 self._push(make_event(self.clock, EventType.STAGE_ENTER,
                                       e, {'stage': stage_name}))
             # Entity moves on without satisfaction update (show incomplete)
-            self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
+            self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
 
     def _handle_stage_show_end(self, event: Event) -> None:
         """A show ends: compute satisfaction for audience, clear arena."""
@@ -532,9 +532,9 @@ class SimulationEngine:
                 next_e = dj_stage.queue.popleft()
                 if dj_stage.enter(next_e):
                     dur = dj_stage.sample_stay_duration()
-                    self._sched(dur, EventType.STAGE_SHOW_END,
+                    self._schedule_event(dur, EventType.STAGE_SHOW_END,
                                 next_e, {'stage': 'DJStage'})
-            self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
+            self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
             return
 
         # MainStage / SideStage show ends
@@ -549,7 +549,7 @@ class SimulationEngine:
                 elif isinstance(ent, FriendsGroup):
                     ent.on_show_completed()
                 ent.shows_attended.append(stage_name)
-                self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, ent)
+                self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, ent)
 
         # Schedule break then next show
         break_dur = stage.break_duration
@@ -697,7 +697,7 @@ class SimulationEngine:
                 self._push(make_event(self.clock, EventType.ALL_STATIONS_DONE,
                                       entity))
         else:
-            self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
+            self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Food stall handlers
@@ -755,14 +755,14 @@ class SimulationEngine:
         # Schedule eating time for the entity that finished service
         prep_time   = station.sample_prep_time()
         eating_time = station.sample_eating_time()
-        self._sched(prep_time + eating_time, EventType.FOOD_EAT_END,
+        self._schedule_event(prep_time + eating_time, EventType.FOOD_EAT_END,
                     entity, {'station': station_name})
 
     def _handle_food_eat_end(self, event: Event) -> None:
         """Entity finishes eating; returns to activity flow."""
         entity = event.entity
         if not entity.departed:
-            self._sched(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
+            self._schedule_event(0, EventType.ENTITY_NEXT_ACTIVITY, entity)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Day end / overnight logic
