@@ -89,6 +89,16 @@ class Entity:
             min(self.cfg.max_satisfaction, self.satisfaction + delta)
         )
 
+        #אופציה פשוטה יותר
+    #def update_satisfaction(self, delta):
+        #self.satisfaction += delta
+
+        #if self.satisfaction > 10:
+        #    self.satisfaction = 10
+
+         #if self.satisfaction < 0:
+        #    self.satisfaction = 0
+
     # ── Routing ───────────────────────────────────────────────────────────────
 
     def next_activity(self) -> Optional[str]:
@@ -100,17 +110,29 @@ class Entity:
     def peek_next_activity(self) -> Optional[str]:
         """Return the next planned activity without consuming it."""
         return self.activity_plan[0] if self.activity_plan else None
+ ### אופציה לכתיבת פשוטה יותר:
+    #def next_activity(self) -> Optional[str]:
+    #if self.activity_plan:
+    #    return self.activity_plan.pop(0)
+    #return None
+
+    #def next_activity(self):
+    #if len(self.activity_plan) > 0:
+    #    next_step = self.activity_plan.pop(0)
+    #   return next_step
+    #return None    
 
     # ── Patience ──────────────────────────────────────────────────────────────
 
     def get_patience(self) -> float:
         """Maximum queue wait time (minutes) before abandonment."""
-        raise NotImplementedError
-
+        raise NotImplementedError 
+    #שגיאה המותאמת לזמן ההמתנה המקסימלי של כל ישות
+    
     # ── Pricing ───────────────────────────────────────────────────────────────
 
     def pay_entry(self, has_overnight: bool) -> None:
-        """Charge ticket (and optional overnight) to spending."""
+        """Charge ticket and optional overnight to spending."""
         if has_overnight:
             self.spending += self.cfg.ticket_with_overnight * self.size
         else:
@@ -122,7 +144,15 @@ class Entity:
         return (f"{self.entity_type}(id={self.entity_id}, "
                 f"size={self.size}, day={self.day}, "
                 f"satisfaction={self.satisfaction:.2f})")
-
+    ### אופציה לכתיבת חלופית:
+    #def __repr__(self):
+    #text = self.entity_type
+    #text += " ID=" + str(self.entity_id)
+    #text += " Size=" + str(self.size)
+    #text += " Day=" + str(self.day)
+    #text += " Satisfaction=" + str(round(self.satisfaction, 2))
+    #return text
+    
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FriendsGroup
