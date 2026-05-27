@@ -1,17 +1,38 @@
 """
 distributions.py
 ================
-All probability distribution sampling functions required by the simulation.
+All probability-distribution sampling functions used by the simulation.
 
-Every sampler draws uniformly random numbers in [0, 1) and transforms them
-using the appropriate algorithm as required by the course:
+The project brief requires that every random variate be generated from
+U(0, 1) via one of the algorithms taught in class:
 
-  - Box-Muller          : Normal distributions
-  - Inverse Transform   : Exponential, Uniform (continuous & discrete)
-  - Composition         : PhotoStation duration (piecewise linear PDF)
-  - Accept-Reject       : DJStage duration (piecewise triangular-like PDF)
+  Box-Muller        - Normal distributions
+                      Used for: charging battery level, body-art glitter,
+                                food ordering service time, and (after
+                                fitting) MainStage show duration.
 
-Additionally: distribution fitting utilities for the Excel sample data.
+  Inverse Transform - Exponential, Uniform (continuous & discrete)
+                      Used for: most arrival processes, SideStage show
+                                duration, food prep times, henna body-art,
+                                FriendsGroup size, etc.
+
+  Composition       - Piecewise PDFs that split naturally into pieces
+                      Used for: PhotoStation service duration (3 linear
+                                pieces over [1, 4]).
+
+  Accept-Reject     - Bounded PDFs without a closed-form inverse CDF
+                      Used for: DJStage stay duration (piecewise PDF
+                                over [20, 60] with a triangular shape).
+
+Additionally this module exposes:
+  - sample_charging_duration : power-law CDF, closed-form inverse
+  - load_sample_data         : reads the two-sheet Excel file
+  - fit_*                    : MLE fits for Exponential / Normal / Uniform
+  - kolmogorov_smirnov_statistic : KS goodness-of-fit metric
+
+Each sampler documents the PDF / CDF / inverse-CDF (or the proposal +
+acceptance test for accept-reject) in its docstring so the report can
+quote the formulas directly.
 """
 
 import math

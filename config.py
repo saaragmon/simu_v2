@@ -176,8 +176,17 @@ class SimConfig:
 
     @property
     def single_arrival_rate_per_min(self) -> float:
-        """Convert from per-day rate to per-minute rate."""
-        return self.single_arrival_rate_per_day / DAY_DURATION
+        """
+        Convert the per-day Singles arrival rate to per-minute.
+
+        Per the project spec, Singles arrive only during a 7-hour window
+        (09:00-16:00 = 420 min), not over the full 11-hour festival day.
+        So `500 / day` means 500 expected arrivals spread over those 7
+        hours, giving a per-minute rate of 500 / 420.
+        """
+        single_arrival_window_min = (
+            self.single_arrival_end - self.single_arrival_start)
+        return self.single_arrival_rate_per_day / single_arrival_window_min
 
 
 # ─── Pre-built alternative configs ────────────────────────────────────────────
