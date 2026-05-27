@@ -273,31 +273,42 @@ def sample_dj_duration() -> float:
 # Inverse CDF: t = 40 * (1 - (1-U)^(1/alpha))
 #
 
-def sample_charging_duration(battery_level: float) -> float:
+def sample_charging_duration(battery_level):
     """
     Sample charging duration given the entity's battery level.
 
     Args:
         battery_level: percentage in [0, 100) from Normal(40,15).
     """
-    battery_level = max(0.0, min(99.9, battery_level))
+    # Clamp battery level to [0, 99.9]
+    if battery_level < 0.0:
+        battery_level = 0.0
+    if battery_level > 99.9:
+        battery_level = 99.9
+
     alpha = 100.0 / (100.0 - battery_level)
     u = sample_uniform_01()
     # Inverse CDF: t = 40 * (1 - (1-U)^(1/alpha))
     return 40.0 * (1.0 - (1.0 - u) ** (1.0 / alpha))
 
 
-def sample_battery_level(cfg_mean: float = 40.0, cfg_std: float = 15.0) -> float:
-    """Sample battery arrival percentage ~ Normal(mean, std), clamped to [0, 100)."""
+def sample_battery_level(cfg_mean=40.0, cfg_std=15.0):
+    """Sample battery arrival percentage ~ Normal(mean, std), clamped to [0, 99.9]."""
     b = sample_normal(cfg_mean, cfg_std)
-    return max(0.0, min(99.9, b))
+
+    if b < 0.0:
+        b = 0.0
+    if b > 99.9:
+        b = 99.9
+
+    return b
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. CONVENIENCE WRAPPERS for common distributions used in the simulation
 # ─────────────────────────────────────────────────────────────────────────────
 
-def sample_body_art_duration(art_type: str) -> float:
+def sample_body_art_duration(art_type):
     """
     Sample body art service duration by art type.
         'glitter': Normal(15, 3) via Box-Muller
@@ -305,19 +316,24 @@ def sample_body_art_duration(art_type: str) -> float:
         'henna'  : Uniform[17, 22] via Inverse Transform
     """
     if art_type == 'glitter':
-        return max(1.0, sample_normal(15.0, 3.0))
+        duration = sample_normal(15.0, 3.0)
+        if duration < 1.0:
+            duration = 1.0
+        return duration
     elif art_type == 'neon':
         return sample_exponential(12.0)
     elif art_type == 'henna':
         return sample_continuous_uniform(17.0, 22.0)
     else:
-        raise ValueError(f"Unknown art type: {art_type}")
+        raise ValueError("Unknown art type: " + str(art_type))
 
 
-def sample_food_service_time(food_service_mean: float = 5.0,
-                              food_service_std:  float = 1.5) -> float:
-    """Order/payment service time ~ Normal(5, 1.5), min=0.5."""
-    return max(0.5, sample_normal(food_service_mean, food_service_std))
+def sample_food_service_time(food_service_mean=5.0, food_service_std=1.5):
+    """Order/payment service time ~ Normal(5, 1.5), minimum 0.5 min."""
+    duration = sample_normal(food_service_mean, food_service_std)
+    if duration < 0.5:
+        duration = 0.5
+    return duration
 
 
 def sample_art_type() -> str:

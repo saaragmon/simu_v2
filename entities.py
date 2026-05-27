@@ -82,22 +82,15 @@ class Entity:
 
     # ── Satisfaction helpers ──────────────────────────────────────────────────
 
-    def update_satisfaction(self, delta: float) -> None:
-        """Clamp satisfaction to [min, max] after applying delta."""
-        self.satisfaction = max(
-            self.cfg.min_satisfaction,
-            min(self.cfg.max_satisfaction, self.satisfaction + delta)
-        )
+    def update_satisfaction(self, delta):
+        """Update satisfaction, then clamp to [0, 10]."""
+        self.satisfaction += delta
 
-        #אופציה פשוטה יותר
-    #def update_satisfaction(self, delta):
-        #self.satisfaction += delta
+        if self.satisfaction > 10:
+            self.satisfaction = 10
 
-        #if self.satisfaction > 10:
-        #    self.satisfaction = 10
-
-         #if self.satisfaction < 0:
-        #    self.satisfaction = 0
+        if self.satisfaction < 0:
+            self.satisfaction = 0
 
     # ── Routing ───────────────────────────────────────────────────────────────
 
