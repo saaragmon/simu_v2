@@ -90,15 +90,19 @@ class RunStatistics:
     # ── Aggregate KPIs ────────────────────────────────────────────────────────
 
     @property
-    def avg_satisfaction(self) -> float:
+    def avg_satisfaction(self):
         scores = [r.satisfaction for r in self.entity_records]
-        return _stats.mean(scores) if scores else 0.0
+        if len(scores) > 0:
+            return _stats.mean(scores)
+        return 0.0
 
     @property
-    def avg_visit_duration(self) -> float:
+    def avg_visit_duration(self):
         times = [r.depart_time - r.arrival_time
                  for r in self.entity_records]
-        return _stats.mean(times) if times else 0.0
+        if len(times) > 0:
+            return _stats.mean(times)
+        return 0.0
 
     @property
     def avg_queue_wait(self) -> Dict[str, float]:
@@ -113,20 +117,26 @@ class RunStatistics:
         return len(self.entity_records)
 
     @property
-    def abandonment_rate(self) -> Dict[str, float]:
+    def abandonment_rate(self):
         result = {}
         for station, count in self.abandonments.items():
             total_served = len(self.queue_wait_times.get(station, []))
-            total        = total_served + count
-            result[station] = count / total if total > 0 else 0.0
+            total = total_served + count
+            if total > 0:
+                result[station] = count / total
+            else:
+                result[station] = 0.0
         return result
 
     @property
-    def utilisation(self) -> Dict[str, float]:
+    def utilisation(self):
         result = {}
         for station, busy in self.station_busy_time.items():
             total = self.station_total_time.get(station, 1.0)
-            result[station] = busy / total if total > 0 else 0.0
+            if total > 0:
+                result[station] = busy / total
+            else:
+                result[station] = 0.0
         return result
 
     def summary(self) -> dict:

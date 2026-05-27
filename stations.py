@@ -62,8 +62,10 @@ class ServiceStation:
     def enqueue(self, entity: 'Entity') -> None:
         self.queue.append(entity)
 
-    def dequeue(self) -> Optional['Entity']:
-        return self.queue.popleft() if self.queue else None
+    def dequeue(self):
+        if len(self.queue) > 0:
+            return self.queue.popleft()
+        return None
 
     def queue_length(self) -> int:
         return len(self.queue)

@@ -94,15 +94,18 @@ class Entity:
 
     # ── Routing ───────────────────────────────────────────────────────────────
 
-    def next_activity(self) -> Optional[str]:
+    def next_activity(self):
         """Return and consume the next planned activity, or None if done."""
-        if self.activity_plan:
-            return self.activity_plan.pop(0)
+        if len(self.activity_plan) > 0:
+            next_step = self.activity_plan.pop(0)
+            return next_step
         return None
 
-    def peek_next_activity(self) -> Optional[str]:
+    def peek_next_activity(self):
         """Return the next planned activity without consuming it."""
-        return self.activity_plan[0] if self.activity_plan else None
+        if len(self.activity_plan) > 0:
+            return self.activity_plan[0]
+        return None
  ### אופציה לכתיבת פשוטה יותר:
     #def next_activity(self) -> Optional[str]:
     #if self.activity_plan:
