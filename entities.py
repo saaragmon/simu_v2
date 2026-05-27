@@ -106,17 +106,6 @@ class Entity:
         if len(self.activity_plan) > 0:
             return self.activity_plan[0]
         return None
- ### אופציה לכתיבת פשוטה יותר:
-    #def next_activity(self) -> Optional[str]:
-    #if self.activity_plan:
-    #    return self.activity_plan.pop(0)
-    #return None
-
-    #def next_activity(self):
-    #if len(self.activity_plan) > 0:
-    #    next_step = self.activity_plan.pop(0)
-    #   return next_step
-    #return None    
 
     # ── Patience ──────────────────────────────────────────────────────────────
 
