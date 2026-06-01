@@ -95,18 +95,21 @@ def paragraph(text):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
-                 verbose=False):
+                 verbose=False, base_seed=1000):
     """
     Execute `num_runs` independent replications of the given scenario.
 
     Each replication:
         - starts a fresh SimulationEngine
         - injects the fitted distribution samplers
+        - seeds the RNG deterministically (base_seed + i)
         - runs the 2-day festival
         - returns a RunStatistics object summarising the run
 
-    The replications use *independent* random seeds (no CRN), so they
-    are appropriate for Welch's t-test later.
+    All scenarios share the same base_seed default, so run i of every
+    scenario sees the same random stream → Common Random Numbers (CRN).
+    That makes Welch's t-test slightly conservative but enables the paired
+    t-test as a stronger alternative.
     """
     multi = MultiRunStatistics(CONFIDENCE_LEVEL, RELATIVE_PRECISION)
     print("\n  Running '{}' — {} replications ...".format(name, num_runs))
@@ -119,7 +122,7 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
             main_stage_duration_sampler=main_stage_sampler,
             verbose=(verbose and i == 0),   # only log the first run
         )
-        stats = engine.run()
+        stats = engine.run(seed=base_seed + i)
         multi.add_run(stats)
         elapsed = time.time() - t0
         s = stats.summary()

@@ -69,6 +69,12 @@ class BoxMuller:
     def __init__(self):
         self._cached: Optional[float] = None
 
+    def reset(self) -> None:
+        """Drop the cached variate. Call between simulation runs so that
+        a cached Z2 from a previous (un-seeded) run doesn't leak into a
+        freshly seeded run and break reproducibility."""
+        self._cached = None
+
     def sample(self, mu: float = 0.0, sigma: float = 1.0) -> float:
         """Return one Normal(mu, sigma) sample."""
         if self._cached is not None:
@@ -97,6 +103,11 @@ _box_muller = BoxMuller()
 def sample_normal(mu: float, sigma: float) -> float:
     """Sample from Normal(mu, sigma) using Box-Muller."""
     return _box_muller.sample(mu, sigma)
+
+
+def reset_box_muller() -> None:
+    """Reset the Box-Muller cache. Call at the start of each replication."""
+    _box_muller.reset()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

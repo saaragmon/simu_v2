@@ -24,10 +24,12 @@ Engine responsibilities:
 from __future__ import annotations
 
 import heapq
+import random
 from typing import Dict, List, Optional, Set
 
 from config import SimConfig, FESTIVAL_START, FESTIVAL_END, DAY_DURATION
 import distributions as dist
+from distributions import reset_box_muller
 from entities import (
     Entity, FriendsGroup, Couple, Single,
     create_entity, reset_entity_counter
@@ -82,6 +84,10 @@ class SimulationEngine:
         # Body-art artist assignment per entity
         self._body_art_artist_map: Dict[int, int] = {}
 
+        # Body-art art_type per entity (sampled at service start, reused
+        # at outcome so duration and satisfaction refer to the same drawing)
+        self._body_art_type_map: Dict[int, str] = {}
+
         # Live (non-departed) entities — used by DayEndEvent for overnight
         self._active_entities: Set[Entity] = set()
 
@@ -97,8 +103,23 @@ class SimulationEngine:
     # Main run loop
     # ─────────────────────────────────────────────────────────────────────────
 
-    def run(self):
-        """Execute the full 2-day simulation and return collected statistics."""
+    def run(self, seed=None):
+        """Execute the full 2-day simulation and return collected statistics.
+
+        Args:
+            seed: Optional integer to seed the RNG (random.seed) so the run
+                  is reproducible. Pass the same seed twice to get identical
+                  results. Passing the same seed to two scenarios enables
+                  Common Random Numbers (paired t-test becomes valid).
+                  If None, the run uses the global RNG state and is NOT
+                  reproducible.
+        """
+        if seed is not None:
+            random.seed(seed)
+        # Box-Muller caches a second variate between calls — drop it so a
+        # cached value from a prior run can't leak past random.seed().
+        reset_box_muller()
+
         reset_entity_counter()
         reset_event_counter()
 
@@ -109,6 +130,7 @@ class SimulationEngine:
         self._abandon_events.clear()
         self._pending_stations.clear()
         self._body_art_artist_map.clear()
+        self._body_art_type_map.clear()
 
         # Re-create festival stations and inject the MainStage duration sampler
         self.festival = Festival(self.cfg)
@@ -262,7 +284,15 @@ class SimulationEngine:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _try_serve_next(self, station, station_name):
-        """Pop the next live entity from the queue and start their service."""
+        """Pop the next live entity from the queue and start their service.
+
+        For BodyArt, an "available server" must be a non-break artist —
+        a slot can be free (busy_servers < num_servers) while all remaining
+        artists are on break. is_server_available() handles that distinction.
+        """
+        if not station.is_server_available():
+            return  # No usable server right now — leave queue intact.
+
         while station.queue:
             next_entity = station.queue.popleft()
             self._cancel_abandon(next_entity.entity_id)
@@ -304,7 +334,9 @@ class SimulationEngine:
             return f.merch_tent.sample_service_time()
         if station_name == 'BodyArt':
             idx = self._get_artist(entity)
-            return f.body_art.sample_service_time(idx)
+            duration, art_type = f.body_art.sample_service_time(idx)
+            self._body_art_type_map[entity.entity_id] = art_type
+            return duration
         return 1.0  # fallback
 
     def _apply_station_outcome(self, station_name, entity):
@@ -316,10 +348,12 @@ class SimulationEngine:
             f.merch_tent.process_purchase(entity)
         elif station_name == 'BodyArt':
             idx = self._body_art_artist_map.pop(entity.entity_id, 0)
+            art_type = self._body_art_type_map.pop(entity.entity_id, 'henna')
             needs_break = f.body_art.record_drawing_complete(idx)
-            f.body_art.process_outcome(entity)
+            f.body_art.process_outcome(entity, art_type)
             if needs_break:
-                f.body_art.artist_on_break[idx] = True
+                # record_drawing_complete already marked the artist on break;
+                # we just need to schedule the break-end event here.
                 break_end_time = self.clock + self.cfg.body_art_break_duration
                 self.schedule_event(
                     StationServiceEndEvent(break_end_time,
@@ -329,7 +363,11 @@ class SimulationEngine:
                                            artist_idx=idx))
 
     def _get_artist(self, entity):
-        """Assign or retrieve a body-art artist for the entity."""
+        """Assign or retrieve a body-art artist for the entity.
+
+        The caller must have already confirmed that a free artist exists
+        (via `is_server_available()`), so the loop is guaranteed to find one.
+        """
         eid = entity.entity_id
         if eid not in self._body_art_artist_map:
             ba = self.festival.body_art
@@ -338,7 +376,11 @@ class SimulationEngine:
                     self._body_art_artist_map[eid] = i
                     break
             else:
-                self._body_art_artist_map[eid] = 0
+                # Should be unreachable: BodyArtStation.is_server_available()
+                # already excludes the "all artists on break" case.
+                raise RuntimeError(
+                    "No available BodyArt artist — is_server_available() "
+                    "should have prevented this assignment.")
         return self._body_art_artist_map[eid]
 
     def _get_abandon_penalty(self, entity):

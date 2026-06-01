@@ -250,16 +250,30 @@ class BodyArtStation(ServiceStation):
                 return i
         return None
 
-    def sample_service_time(self, artist_idx: int) -> float:
+    def is_server_available(self) -> bool:
+        """
+        Override: an artist counts as available only if they are NOT on break.
+        Without this, the engine could assign a new entity to a station even
+        when all artists are on their mandatory break.
+        """
+        free_artists = sum(1 for on_break in self.artist_on_break
+                           if not on_break)
+        return self.busy_servers < free_artists
+
+    def sample_service_time(self, artist_idx: int) -> Tuple[float, str]:
         """
         Sample service duration for one entity visit.
         The entity represents 1 slot regardless of group size
         (each person in the group queues separately for body art –
         but since entities move as a group, we approximate with the
         max service time across group members for simplicity).
+
+        Returns (duration, art_type) so the caller can later use the
+        SAME art_type for the satisfaction outcome — sampling it twice
+        would let an entity get henna's duration but glitter's bonus.
         """
         art_type = dist.sample_art_type()
-        return dist.sample_body_art_duration(art_type)
+        return dist.sample_body_art_duration(art_type), art_type
 
     def record_drawing_complete(self, artist_idx: int) -> bool:
         """
@@ -276,13 +290,13 @@ class BodyArtStation(ServiceStation):
         """Called when an artist's mandatory break ends."""
         self.artist_on_break[artist_idx] = False
 
-    def process_outcome(self, entity: 'Entity') -> float:
+    def process_outcome(self, entity: 'Entity', art_type: str) -> float:
         """
         Apply satisfaction changes for body art experience.
-        Uses representative random draw for the whole entity.
+        Uses the SAME art_type that was sampled for the service time so
+        duration and outcome refer to the same drawing.
         Returns satisfaction delta.
         """
-        art_type = dist.sample_art_type()
         cfg = self.cfg
 
         if art_type == 'glitter':
@@ -514,7 +528,10 @@ class Stage:
         """
         if dist.sample_uniform_01() < 0.5:
             # Positive experience
-            T = int(show_end_time / 60)  # Hour of day
+            # show_end_time is in minutes from midnight of day 1, so a day-2
+            # show ending at 19:00 would give T = 30 with int(t/60). We need
+            # the *hour of day* (1-24), so wrap via modulo 24.
+            T = int(show_end_time / 60) % 24
             G = self.genre_weight
             return (G - 1) / 2.0 + (T - 1) / 19.0
         else:
