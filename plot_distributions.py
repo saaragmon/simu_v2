@@ -86,25 +86,20 @@ def _theoretical_pdf_curve(dist_name: str, params: dict,
 
 def histogram_with_density(data: np.ndarray, label: str,
                             dist_name: str, params: dict, ax) -> None:
-    """Histogram + empirical KDE + theoretical PDF of the chosen fit."""
-    # Empirical histogram (density-normalised so it aligns with PDFs)
+    """Histogram + theoretical PDF of the chosen fit."""
+    # Empirical histogram (density-normalised so it aligns with the PDF)
     ax.hist(data, bins=20, density=True, edgecolor='black', alpha=0.7,
             label='Histogram', color=UNIFIED_BLUE)
 
-    # Empirical KDE (no pandas dependency — Gaussian kernel via scipy)
-    from scipy.stats import gaussian_kde
-    kde = gaussian_kde(data, bw_method=0.5)
     x_lo, x_hi = float(np.min(data)), float(np.max(data))
     pad = 0.05 * (x_hi - x_lo)
-    xs = np.linspace(max(0.0, x_lo - pad), x_hi + pad, 400)
-    ax.plot(xs, kde(xs), color=UNIFIED_PINK, lw=2, label='KDE')
 
     # Theoretical PDF of the fitted distribution
     xs_t, ys_t = _theoretical_pdf_curve(dist_name, params, x_lo, x_hi)
-    ax.plot(xs_t, ys_t, '--', color='black', lw=1.5,
+    ax.plot(xs_t, ys_t, color=UNIFIED_PINK, lw=2,
             label=f'Fitted {dist_name} PDF')
 
-    ax.set_title(f"Histogram + Density — {label}", color=TEXT_COLOR)
+    ax.set_title(f"Histogram + Fitted PDF — {label}", color=TEXT_COLOR)
     ax.set_xlabel(f"{label} values", color=TEXT_COLOR)
     ax.set_ylabel('Density', color=TEXT_COLOR)
     ax.set_xlim(left=max(0.0, x_lo - pad))
