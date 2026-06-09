@@ -430,7 +430,7 @@ class MainStage(Stage):# Show duration ~ Normal(mu=45.90, sigma=8.97) minutes, f
         self.early_leave_prob = cfg.main_stage_early_leave_prob
         self.early_leave_delay = cfg.main_stage_early_leave_delay
 
-        # Duration sampler: callable → float (minutes)
+        # Duration sampler
         self._duration_sampler = duration_sampler or self._default_duration
 
     def _default_duration(self) -> float:
