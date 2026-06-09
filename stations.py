@@ -426,18 +426,9 @@ class Stage:
 
 # Specialised stages
 
-class MainStage(Stage):
-    """
-    Mainstream concerts (capacity 200, 10-min break between shows).
+class MainStage(Stage):# Show duration ~ Normal(mu=45.90, sigma=8.97) minutes, fitted from samples
 
-    Show duration ~ Normal(mu=45.90, sigma=8.97) minutes, fitted from
-    100 real samples (KS test passed at alpha=0.05).
-
-    Special rule: last 10 entities (back rows) may leave 15 min into the show
-    with probability 0.5.
-    """
-
-    def __init__(self, cfg: SimConfig, duration_sampler=None):
+    def __init__(self, cfg: SimConfig, duration_sampler=None): 
         super().__init__('MainStage', cfg.main_stage_capacity,
                          genre='mainstream', genre_weight=cfg.main_stage_genre_weight)
         self.break_duration   = cfg.main_stage_break
@@ -451,18 +442,15 @@ class MainStage(Stage):
         """Show duration ~ Normal(45.90, 8.97) fitted from Excel data. Minimum 10 min."""
         return max(dist.sample_normal(45.90, 8.97), 10.0)
 
-    def sample_show_duration(self) -> float:
+    def sample_show_duration(self) -> float: #The engine calls this every time a show starts
         return self._duration_sampler()
 
-    def set_duration_sampler(self, sampler) -> None:
+    def set_duration_sampler(self, sampler) -> None: # Called by engine.py to inject the live Excel-fitted sampler
         """Inject a fitted duration sampler from distribution_fitting module."""
         self._duration_sampler = sampler
 
 
-class SideStage(Stage):
-    """
-    Indie concerts (capacity 100, 5-min break, Uniform[20,30] duration).
-    """
+class SideStage(Stage): #Indie concerts (capacity 100, 5-min break, Uniform[20,30] duration).
 
     def __init__(self, cfg: SimConfig):
         super().__init__('SideStage', cfg.side_stage_capacity,
@@ -475,15 +463,7 @@ class SideStage(Stage):
         return dist.sample_continuous_uniform(self._dur_min, self._dur_max)
 
 
-class DJStage(Stage):
-    """
-    Electronic / DJ stage: music plays continuously all day.
-    Capacity: 70 concurrent guests at any moment.
-
-    Instead of shows, each entity independently stays for a sampled duration
-    (Accept-Reject sampler) and then leaves.  New entities can enter whenever
-    capacity allows.
-    """
+class DJStage(Stage): #Electronic / DJ stage (capacity 70, no breaks, Accept-Reject sampled stay durations for each entity).
 
     def __init__(self, cfg: SimConfig):
         super().__init__('DJStage', cfg.dj_stage_capacity,
@@ -491,35 +471,22 @@ class DJStage(Stage):
         # Override show mechanics – DJStage is always "in progress"
         self.show_in_progress = True
 
-    def enter(self, entity: 'Entity') -> bool:
-        """
-        Attempt to admit entity.  Returns True if admitted (space available).
-        """
+    def enter(self, entity: 'Entity') -> bool: # Attempt to admit an entity to the DJ stage. Returns True if there's space available.
         if entity.size <= self.available_capacity():
             self._enter_arena(entity)
             return True
         return False
 
-    def exit(self, entity: 'Entity') -> None:
-        """Entity leaves the DJ stage."""
+    def exit(self, entity: 'Entity') -> None: #Entity leaves the DJ stage
         self.remove_from_audience(entity)
 
-    def sample_stay_duration(self) -> float:
-        """DJ stage stay duration via Accept-Reject sampler."""
+    def sample_stay_duration(self) -> float: #DJ stage stay duration using an Accept-Reject sampler
         return dist.sample_dj_duration()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Festival: container for all stations
-# ─────────────────────────────────────────────────────────────────────────────
 
 class Festival:
-    """
-    Aggregates all stations and stages for one simulation run.
-
-    Provides a single lookup interface and the shortest-queue helper used
-    by FriendsGroup routing.
-    """
 
     STATION_NAMES = ['PhotoStation', 'ChargingStation', 'MerchTent', 'BodyArt']
     STAGE_NAMES   = ['MainStage', 'SideStage', 'DJStage']
@@ -544,7 +511,7 @@ class Festival:
         self.side_stage = SideStage(cfg)
         self.dj_stage   = DJStage(cfg)
 
-        # Convenient name → object map
+        # Station registry for easy access by name
         self.stations: dict = {
             'EntryGate':       self.entry_gate,
             'PhotoStation':    self.photo_station,
@@ -555,24 +522,19 @@ class Festival:
             'FoodStall_pizza':  self.food_pizza,
             'FoodStall_asian':  self.food_asian,
         }
+        # Stage registry for easy access by name
         self.stages: dict = {
             'MainStage': self.main_stage,
             'SideStage': self.side_stage,
             'DJStage':   self.dj_stage,
         }
 
-    def get_station(self, name: str):
+    def get_station(self, name: str): # Return the station or stage object by name
         return self.stations.get(name) or self.stages.get(name)
 
-    def shortest_queue_station(self,
-                               exclude: Optional[List[str]] = None) -> str:
-        """
-        Return the name of the service station with the shortest effective
-        queue (queue length + busy servers).
+    def shortest_queue_station(self, #Return the name of the service station with the shortest effective queue (queue length + busy servers)
+                               exclude: Optional[List[str]] = None) -> str:  #Args: exclude: Station names to skip (e.g., stages, food stalls).
 
-        Args:
-            exclude: Station names to skip (e.g., stages, food stalls).
-        """
         exclude = exclude or []
         candidates = {
             name: self.stations[name].effective_queue_length()
@@ -581,21 +543,17 @@ class Festival:
         }
         return min(candidates, key=candidates.get)
 
-    def ordered_stations_by_queue(self,
+    def ordered_stations_by_queue(self, 
                                   exclude: Optional[List[str]] = None
-                                  ) -> List[str]:
-        """
-        Return all service station names sorted by current queue length
-        (shortest first).
-        """
+                                  ) -> List[str]: 
+       
         exclude = exclude or []
         candidates = [
             (name, self.stations[name].effective_queue_length())
             for name in self.STATION_NAMES
             if name not in exclude and name in self.stations
         ]
-        return [name for name, _ in sorted(candidates, key=lambda x: x[1])]
+        return [name for name, _ in sorted(candidates, key=lambda x: x[1])]  #Return all service station names sorted by current queue length
 
-    def set_main_stage_sampler(self, sampler) -> None:
-        """Inject a fitted duration sampler into MainStage."""
+    def set_main_stage_sampler(self, sampler) -> None: #Passes the Excel-fitted sampler down to MainStage
         self.main_stage.set_duration_sampler(sampler)
