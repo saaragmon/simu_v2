@@ -162,7 +162,7 @@ class SimConfig:
     visitor_gift_initial_satisfaction: float = 5.0  # raised to 6.5 in alternative
 
     # ── Statistical analysis ──────────────────────────────────────────────────
-    confidence_level:       float = 0.9
+    confidence_level:       float = 0.95
     relative_precision:     float = 0.1
 
     @property

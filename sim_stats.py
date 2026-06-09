@@ -212,7 +212,7 @@ class MultiRunStatistics:
     standard suite of comparison tests.
     """
 
-    def __init__(self, confidence_level=0.90, relative_precision=0.10):
+    def __init__(self, confidence_level=0.95, relative_precision=0.10):
         self.confidence_level = confidence_level
         self.relative_precision = relative_precision
         self.runs: List[RunStatistics] = []

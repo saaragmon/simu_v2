@@ -52,11 +52,11 @@ EXCEL_PATH = os.path.join(os.path.dirname(__file__),
 
 # Pilot study: a small batch used to estimate the variance of the KPI
 # we want to control. Five replications is a common starting point.
-PILOT_RUNS = 5
+PILOT_RUNS = 20
 
-# Required by the project spec: confidence level 0.9 and relative
+# Required by the project spec: confidence level 0.95 (α = 0.05) and relative
 # precision 0.1 for every comparison.
-CONFIDENCE_LEVEL = 0.90
+CONFIDENCE_LEVEL = 0.95
 RELATIVE_PRECISION = 0.10
 
 # KPIs we will optimise / compare across scenarios.
@@ -134,17 +134,6 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
     return multi
 
 
-def determine_required_runs(pilot_results, kpi='avg_satisfaction'):
-    """
-    Use the pilot variance to compute n* via the standard formula:
-
-        n* = ceil( (t_{α/2, n0-1} * s / (δ * x_bar))^2 )
-
-    Returns at least the pilot-runs count.
-    """
-    return pilot_results.required_replications(kpi, pilot_runs=PILOT_RUNS)
-
-
 def print_comparison(baseline, alternative, alt_name):
     """
     Compare one alternative scenario against the baseline using Welch's
@@ -220,54 +209,15 @@ def main(args):
     else:
         print("\n  Skipping Excel fitting — using built-in defaults.")
 
-    # ── Step 2: Pilot study ──────────────────────────────────────────────────
-    section("[2] Pilot study (baseline)")
-    paragraph("""
-        We first run a short pilot ({} replications) of the baseline.
-        Its only purpose is to estimate the sample variance s^2 of
-        avg_satisfaction so that we can compute how many additional
-        replications are needed for a relative precision of δ = {}
-        at confidence level 1 - α = {}.
-    """.format(PILOT_RUNS, RELATIVE_PRECISION, CONFIDENCE_LEVEL))
-
+    # ── Step 2: Full baseline run ────────────────────────────────────────────
+    total_runs = args.runs if args.runs else PILOT_RUNS
     baseline_alt = build_baseline()
-    pilot_results = run_scenario(
-        name='Baseline (pilot)',
-        cfg=baseline_alt.config,
-        num_runs=PILOT_RUNS,
-        friends_sampler=friends_sampler,
-        main_stage_sampler=main_stage_sampler,
-        verbose=args.verbose,
-    )
 
-    # ── Step 3: Determine required replications ──────────────────────────────
-    section("[3] Required number of replications")
+    section("[2] Full baseline ({} replications)".format(total_runs))
     paragraph("""
-        Formula (Banks et al., Discrete-Event System Simulation):
-
-            n* = ceil( ( t_{α/2, n0-1} * s / ( δ * x_bar ) )^2 )
-
-        with n0 = pilot size, s = pilot std, x_bar = pilot mean of
-        the chosen KPI (avg_satisfaction here).
-    """)
-
-    if args.runs:
-        required_runs = args.runs
-        print("\n  Using user-specified replication count: {}".format(
-            required_runs))
-    else:
-        required_runs = determine_required_runs(pilot_results)
-        print("\n  n* = {}  (α={}, δ={})".format(
-            required_runs, 1 - CONFIDENCE_LEVEL, RELATIVE_PRECISION))
-
-    total_runs = max(required_runs, PILOT_RUNS)
-
-    # ── Step 4: Full baseline run ────────────────────────────────────────────
-    section("[4] Full baseline ({} replications)".format(total_runs))
-    paragraph("""
-        Now run the baseline configuration `total_runs` times to get
-        precise estimates of every KPI plus their confidence intervals.
-    """)
+        Run the baseline configuration `{}` times to get precise estimates
+        of every KPI plus their {:.0f}% confidence intervals.
+    """.format(total_runs, CONFIDENCE_LEVEL * 100))
 
     baseline_stats = run_scenario(
         name='Baseline',
@@ -279,7 +229,7 @@ def main(args):
     print(baseline_stats.report())
 
     # ── Step 5: Alternative scenarios ────────────────────────────────────────
-    section("[5] Alternative scenarios")
+    section("[3] Alternative scenarios")
     paragraph("""
         We picked two budget-feasible combinations of the seven
         improvement options listed in the project brief (budget cap
@@ -318,7 +268,7 @@ def main(args):
     print(combo_b_stats.report())
 
     # ── Step 6: Statistical comparison ───────────────────────────────────────
-    section("[6] Statistical comparison (Welch's two-sample t-test)")
+    section("[4] Statistical comparison (Welch's two-sample t-test)")
     paragraph("""
         Welch's t-test is appropriate because the replications across
         scenarios are independent (no Common Random Numbers).  Test
