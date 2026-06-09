@@ -38,7 +38,23 @@ import statistics as _stats
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
-from scipy.stats import t as student_t
+try:
+    from scipy.stats import t as student_t
+except Exception:  # pragma: no cover - fall back when scipy is not installed
+    class _MissingScipyT:
+        def ppf(self, *args, **kwargs):
+            raise RuntimeError(
+                "scipy is required for statistical functions in sim_stats.py; "
+                "please install scipy (pip install scipy)"
+            )
+
+        def cdf(self, *args, **kwargs):
+            raise RuntimeError(
+                "scipy is required for statistical functions in sim_stats.py; "
+                "please install scipy (pip install scipy)"
+            )
+
+    student_t = _MissingScipyT()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
