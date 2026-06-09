@@ -412,7 +412,8 @@ class MultiRunStatistics:
 
     def report(self):
         """
-        Print a textual summary of all KPIs with 90% confidence intervals.
+        Print a textual summary of all KPIs with confidence intervals
+        at the configured `confidence_level` (defaults to 95%).
         """
         lines = [
             "\n" + "=" * 60,
