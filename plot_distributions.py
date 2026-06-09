@@ -37,7 +37,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import probplot, expon, norm, uniform
 
-from distributions import load_sample_data
+from distributions_delete import load_sample_data
 from distribution_fitting import best_fit
 
 

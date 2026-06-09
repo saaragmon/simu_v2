@@ -1,18 +1,3 @@
-"""
-algorithm_sample.py
-===================
-All random-variate samplers for the Queuechella festival simulation,
-collected in one class.
-
-Every method uses exactly one of the four techniques taught in class:
-  - Inverse Transform
-  - Composition
-  - Accept-Reject
-  - Box-Muller
-
-No external libraries are used – only math and random.
-"""
-
 import math
 import random
 
@@ -56,9 +41,7 @@ class AlgorithmSample:
         return -mean * math.log(u)
 
     # -- Uniform (continuous): service times where only range is known -----
-    #
-    # CDF:     F(x) = (x - a) / (b - a)
-    # Inverse: x = a + (b - a) * U
+ 
 
     @staticmethod
     def entry_scan_duration(a=1.5, b=3.0):

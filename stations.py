@@ -30,7 +30,7 @@ from collections import deque
 from typing import Deque, List, Optional, Tuple, TYPE_CHECKING
 
 from config import SimConfig
-import distributions as dist
+import distributions_delete as dist
 
 if TYPE_CHECKING:
     from entities import Entity

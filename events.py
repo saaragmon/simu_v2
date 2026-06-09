@@ -127,7 +127,7 @@ class EntityNextActivityEvent(Event):
 
     def handle(self, sim):
         from entities import FriendsGroup, Couple, Single
-        import distributions as dist
+        import distributions_delete as dist
         from config import FESTIVAL_START
 
         entity = self.entity
@@ -226,7 +226,7 @@ class StageEarlyLeaveEvent(Event):
         self.stage_name = stage_name
 
     def handle(self, sim):
-        import distributions as dist
+        import distributions_delete as dist
 
         entity = self.entity
         stage = sim.festival.stages[self.stage_name]
