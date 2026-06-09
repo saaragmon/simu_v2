@@ -28,8 +28,8 @@ import random
 from typing import Dict, List, Optional, Set
 
 from config import SimConfig, FESTIVAL_START, FESTIVAL_END, DAY_DURATION
-import distributions_delete as dist
-from distributions_delete import reset_box_muller
+import distributions as dist
+from distributions import reset_box_muller
 from entities import (
     Entity, FriendsGroup, Couple, Single,
     create_entity, reset_entity_counter

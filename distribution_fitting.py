@@ -21,7 +21,7 @@ from __future__ import annotations
 import math
 from typing import Callable, Dict, List, Optional, Tuple
 
-from distributions_delete import (
+from distributions import (
     fit_exponential, fit_normal, fit_uniform,
     kolmogorov_smirnov_statistic,
     sample_exponential, sample_normal, sample_continuous_uniform,

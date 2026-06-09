@@ -2,7 +2,7 @@ from __future__ import annotations
 import random
 from typing import List, Optional
 from config import SimConfig
-import distributions_delete as dist
+import distributions as dist
 
 _entity_counter = 0  # Global monotonic ID generator
 

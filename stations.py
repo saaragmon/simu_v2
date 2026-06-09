@@ -1,8 +1,4 @@
 """
-stations.py
-===========
-Station and stage classes for the Queuechella simulation.
-
 Every physical location in the festival is modelled as one of these classes:
 
 Service Stations  (queue + finite servers):
@@ -30,103 +26,82 @@ from collections import deque
 from typing import Deque, List, Optional, Tuple, TYPE_CHECKING
 
 from config import SimConfig
-import distributions_delete as dist
+import distributions as dist
 
 if TYPE_CHECKING:
     from entities import Entity
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Base service station
-# ─────────────────────────────────────────────────────────────────────────────
 
 class ServiceStation:
-    """
-    Generic multi-server FIFO queue station.
-
-    Attributes:
-        name         : Station identifier string.
-        num_servers  : Total number of parallel servers.
-        busy_servers : Currently occupied server count.
-        queue        : FIFO waiting line.
-    """
 
     def __init__(self, name: str, num_servers: int):
-        self.name:         str               = name
-        self.num_servers:  int               = num_servers
-        self.busy_servers: int               = 0
-        self.queue:        Deque['Entity']   = deque()
+        self.name:         str               = name #Station identifier
+        self.num_servers:  int               = num_servers # Total number of parallel servers
+        self.busy_servers: int               = 0 #Currently occupied server count
+        self.queue:        Deque['Entity']   = deque() # FIFO waiting line
 
     # ── Queue management ──────────────────────────────────────────────────────
 
-    def enqueue(self, entity: 'Entity') -> None:
-        self.queue.append(entity)
+    def enqueue(self, entity: 'Entity') -> None: # Add entity to the end of the queue
+        self.queue.append(entity) 
 
-    def dequeue(self):
+    def dequeue(self): # Remove and return the next entity in line
         if len(self.queue) > 0:
-            return self.queue.popleft()
+            return self.queue.popleft() 
         return None
 
-    def queue_length(self) -> int:
-        return len(self.queue)
+    def queue_length(self) -> int:# Current number of entities waiting in line
+        return len(self.queue) 
 
-    def is_server_available(self) -> bool:
-        return self.busy_servers < self.num_servers
-
-    def acquire_server(self) -> None:
+    def is_server_available(self) -> bool:# True if at least one server is free
+        return self.busy_servers < self.num_servers 
+    
+    def acquire_server(self) -> None: # Mark server as occupied when an entity is starting a service
         assert self.busy_servers < self.num_servers, "No server available"
         self.busy_servers += 1
 
-    def release_server(self) -> None:
+    def release_server(self) -> None: # Mark server as free when an entity finishes service
         assert self.busy_servers > 0, "No server to release"
         self.busy_servers -= 1
 
-    def effective_queue_length(self) -> int:
-        """Combined measure: waiting + in service (used for shortest-queue routing)."""
+    def effective_queue_length(self) -> int: #used for shortest-queue routing
+        """Combined measure: waiting + in service """
         return self.queue_length() + self.busy_servers
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str: # representation
         return (f"{self.name}(servers={self.num_servers}, "
                 f"busy={self.busy_servers}, queue={self.queue_length()})")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Entry Gate
-# ─────────────────────────────────────────────────────────────────────────────
 
 class EntryGate(ServiceStation):
     """
     Festival entry gate with 2-phase serial service:
-        Phase 1: Ticket scan   ~ Uniform[1.5, 3.0] minutes
-        Phase 2: Security check ~ Exponential(2.0) minutes
-
-    5 parallel clerks; each handles one entity at a time (both phases).
+        Phase 1: Ticket scan   ~ Uniform[1.5, 3.0] min
+        Phase 2: Security check ~ Exp(2.0) min
     """
 
     def __init__(self, cfg: SimConfig):
         super().__init__('EntryGate', cfg.entry_clerks)
         self.cfg = cfg
 
-    def sample_service_time(self) -> float:
+    def sample_service_time(self) -> float: #sample duration of entry process 
         """Total entry service time = scan + security."""
-        scan_time     = dist.sample_continuous_uniform(self.cfg.entry_scan_min,
-                                                       self.cfg.entry_scan_max)
+        scan_time     = dist.sample_continuous_uniform(self.cfg.entry_scan_min, self.cfg.entry_scan_max) 
         security_time = dist.sample_exponential(self.cfg.entry_security_mean)
         return scan_time + security_time
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Photo Station
-# ─────────────────────────────────────────────────────────────────────────────
 
 class PhotoStation(ServiceStation):
     """
-    3 photo booths sharing one FIFO queue.
-
-    Service duration: piecewise linear PDF sampled via Composition method.
-    Outcome probabilities:
-        0.7 → satisfied: +2 satisfaction, purchase print (30 NIS)
-        0.3 → 0.5 chance: −0.5 satisfaction
+        probability of satiscaction after photo session:
+        0.7 → satisfied: +2 satisfaction score and purchase print (30 NIS)
+        0.3 → 0.5 chance: −0.5 satisfaction score
     """
 
     def __init__(self, cfg: SimConfig):
@@ -137,31 +112,24 @@ class PhotoStation(ServiceStation):
         return dist.sample_photo_duration()
 
     def process_outcome(self, entity: 'Entity') -> float:
-        """
-        Apply satisfaction and spending changes after a photo session.
-        Returns the satisfaction delta applied.
-        """
+       
         if dist.sample_uniform_01() < self.cfg.photo_satisfied_prob:
-            entity.update_satisfaction(self.cfg.photo_satisfied_bonus)
+            entity.update_satisfaction(self.cfg.photo_satisfied_bonus) #client is satisfied, add bonus and but photo
             entity.spending += self.cfg.photo_print_cost
             return self.cfg.photo_satisfied_bonus
         else:
-            if dist.sample_uniform_01() < self.cfg.photo_unsatisfied_penalty_prob:
+            if dist.sample_uniform_01() < self.cfg.photo_unsatisfied_penalty_prob: #client is unsatisfied
                 entity.update_satisfaction(-self.cfg.photo_unsatisfied_penalty)
                 return -self.cfg.photo_unsatisfied_penalty
         return 0.0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Charging Station
-# ─────────────────────────────────────────────────────────────────────────────
 
 class ChargingStation(ServiceStation):
     """
-    150 phone charging slots (each slot is a "server").
-
-    Battery level on arrival: Normal(40, 15) clamped to [0, 100).
-    Charging duration: custom power-law CDF dependent on battery level.
+    150 phone charging slots (each slot is a "server")
+    Charging duration dependent on battery level.
     """
 
     def __init__(self, cfg: SimConfig):
@@ -174,15 +142,11 @@ class ChargingStation(ServiceStation):
         return dist.sample_charging_duration(battery)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Merch Tent
-# ─────────────────────────────────────────────────────────────────────────────
 
 class MerchTent(ServiceStation):
     """
-    7 cashiers for merchandise purchases.
-
-    Service duration: Uniform[2, 6] minutes.
+    7 cashiers for merchandise purchases, Service duration: Uniform[2, 6] minutes.
     Each visitor independently buys:
         Festival shirt (p=0.8):  100 NIS
         Festival hat   (p=0.4):   50 NIS
@@ -194,17 +158,14 @@ class MerchTent(ServiceStation):
         super().__init__('MerchTent', cfg.merch_cashiers)
         self.cfg = cfg
 
-    def sample_service_time(self) -> float:
+    def sample_service_time(self) -> float: #sample duration of merchandise purchase process
         return dist.sample_continuous_uniform(self.cfg.merch_service_min,
                                               self.cfg.merch_service_max)
 
-    def process_purchase(self, entity: 'Entity') -> float:
-        """
-        Simulate merchandise purchases for every REAL PERSON in the entity.
-        Returns total revenue from this entity's group.
-        """
+    def process_purchase(self, entity: 'Entity') -> float: # Simulate merchandise purchases for every person in the entity.
+
         total = 0.0
-        for _ in range(entity.size):
+        for _ in range(entity.size): # Each person in the group independently decides what to buy, loops runs entity.size times
             if dist.sample_uniform_01() < self.cfg.merch_festival_shirt_prob:
                 total += self.cfg.merch_festival_shirt_price
             if dist.sample_uniform_01() < self.cfg.merch_hat_prob:
@@ -213,28 +174,13 @@ class MerchTent(ServiceStation):
                 total += self.cfg.merch_flag_price
             if dist.sample_uniform_01() < self.cfg.merch_band_shirt_prob:
                 total += self.cfg.merch_band_shirt_price
-        entity.spending += total
+        entity.spending += total # Update the entity's total spending with the cost of the purchased merchandise
         return total
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Body Art Station
-# ─────────────────────────────────────────────────────────────────────────────
 
 class BodyArtStation(ServiceStation):
-    """
-    2 body art artists.
-
-    Art types (chosen randomly for each person in the entity):
-        Glitter & gems (p=0.3): Normal(15, 3) min;
-            p=0.7 satisfied → +0.8 satisfaction
-        Neon paint     (p=0.3): Exponential(12) min;
-            p=0.6 satisfied → +1.2 satisfaction
-        Henna tattoo   (p=0.4): Uniform[17,22] min;
-            p=0.8 satisfied → +0.7 satisfaction
-
-    Artists take a mandatory 15-minute break after every 10 drawings.
-    """
 
     def __init__(self, cfg: SimConfig):
         super().__init__('BodyArt', cfg.body_art_artists)
@@ -243,67 +189,42 @@ class BodyArtStation(ServiceStation):
         self.artist_drawing_counts: List[int]  = [0] * cfg.body_art_artists
         self.artist_on_break:       List[bool] = [False] * cfg.body_art_artists
 
-    def get_available_artist(self) -> Optional[int]:
-        """Return index of first available (free, not on break) artist."""
+    def get_available_artist(self) -> Optional[int]: #find a free artist index, if all are busy return None
+        """Return index of the first available artist."""
         for i in range(len(self.artist_drawing_counts)):
             if not self.artist_on_break[i]:
                 return i
         return None
 
-    def is_server_available(self) -> bool:
-        """
-        Override: an artist counts as available only if they are NOT on break.
-        Without this, the engine could assign a new entity to a station even
-        when all artists are on their mandatory break.
-        """
-        free_artists = sum(1 for on_break in self.artist_on_break
-                           if not on_break)
-        return self.busy_servers < free_artists
+    def is_server_available(self) -> bool: #check if any artist is available (not on break)
+        return self.busy_servers < self.artist_on_break.count(False) #Returns True if the number of busy artists is less than the number of artists that aren't on break 
+
 
     def sample_service_time(self, artist_idx: int) -> Tuple[float, str]:
-        """
-        Sample service duration for one entity visit.
-        The entity represents 1 slot regardless of group size
-        (each person in the group queues separately for body art –
-        but since entities move as a group, we approximate with the
-        max service time across group members for simplicity).
-
-        Returns (duration, art_type) so the caller can later use the
-        SAME art_type for the satisfaction outcome — sampling it twice
-        would let an entity get henna's duration but glitter's bonus.
-        """
+        """Sample service time for the given artist index and return it along with the art type."""
         art_type = dist.sample_art_type()
         return dist.sample_body_art_duration(art_type), art_type
 
     def record_drawing_complete(self, artist_idx: int) -> bool:
-        """
-        Increment drawing count for artist.
-        Returns True if artist must now take a break.
-        """
-        self.artist_drawing_counts[artist_idx] += 1
-        if self.artist_drawing_counts[artist_idx] % self.cfg.body_art_break_after == 0:
+        """Count of drawings completed by an artist, Return True if they need a break (after 10 drawings)."""
+        self.artist_drawing_counts[artist_idx] += 1 
+        if self.artist_drawing_counts[artist_idx] % self.cfg.body_art_break_after == 0: # After every 10 drawings, the artist needs a break
             self.artist_on_break[artist_idx] = True
             return True
         return False
 
-    def artist_break_done(self, artist_idx: int) -> None:
-        """Called when an artist's mandatory break ends."""
+    def artist_break_done(self, artist_idx: int) -> None: # Mark the artist as available again after their break is done
         self.artist_on_break[artist_idx] = False
 
     def process_outcome(self, entity: 'Entity', art_type: str) -> float:
-        """
-        Apply satisfaction changes for body art experience.
-        Uses the SAME art_type that was sampled for the service time so
-        duration and outcome refer to the same drawing.
-        Returns satisfaction delta.
-        """
+        """ Sample a random art type, apply its satisfaction effect to the entity, and return the satisfaction change. """
         cfg = self.cfg
 
         if art_type == 'glitter':
             if dist.sample_uniform_01() < cfg.glitter_satisfied_prob:
                 entity.update_satisfaction(cfg.glitter_satisfied_bonus)
                 return cfg.glitter_satisfied_bonus
-        elif art_type == 'neon':
+        elif art_type == 'neon': 
             if dist.sample_uniform_01() < cfg.neon_satisfied_prob:
                 entity.update_satisfaction(cfg.neon_satisfied_bonus)
                 return cfg.neon_satisfied_bonus
@@ -314,14 +235,11 @@ class BodyArtStation(ServiceStation):
         return 0.0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Food Stall (one restaurant)
-# ─────────────────────────────────────────────────────────────────────────────
 
 class FoodStall(ServiceStation):
+    # One food restaurant with a single cashier queue.
     """
-    One food restaurant with a single cashier queue.
-
     Service time (ordering + payment): Normal(5, 1.5) minutes.
     Preparation time: depends on restaurant type.
     Eating time: Uniform[15, 35] minutes.
@@ -333,11 +251,11 @@ class FoodStall(ServiceStation):
         self.restaurant_type = restaurant_type
         self.cfg = cfg
 
-    def sample_order_service_time(self) -> float:
+    def sample_order_service_time(self) -> float: #sample duration of the ordering and payment process
         return dist.sample_food_service_time(self.cfg.food_service_mean,
                                              self.cfg.food_service_std)
 
-    def sample_prep_time(self) -> float:
+    def sample_prep_time(self) -> float: #sample duration of food preparation based on the restaurant type
         rt = self.restaurant_type
         if rt == 'pizza':
             return dist.sample_continuous_uniform(self.cfg.pizza_prep_min,
@@ -351,15 +269,14 @@ class FoodStall(ServiceStation):
         else:
             raise ValueError(f"Unknown restaurant type: {rt}")
 
-    def sample_eating_time(self) -> float:
+    def sample_eating_time(self) -> float: #sample duration of the eating process
         return dist.sample_continuous_uniform(self.cfg.food_eating_min,
                                               self.cfg.food_eating_max)
 
-    def calculate_meal_cost(self, entity: 'Entity') -> float:
-        """Calculate food cost for the entire entity group."""
+    def calculate_meal_cost(self, entity: 'Entity') -> float: #calculate the total cost of the meal for the entity group
         rt = self.restaurant_type
         if rt == 'pizza':
-            # Individuals: personal serving; groups: may share family platters
+            # Individuals: personal serving, groups: may share family platters
             people = entity.size
             if entity.entity_type == 'Single':
                 return self.cfg.pizza_individual_price
@@ -375,17 +292,14 @@ class FoodStall(ServiceStation):
             return self.cfg.asian_price * entity.size
         return 0.0
 
-    def process_outcome(self, entity: 'Entity') -> float:
-        """Apply satisfaction penalty if food is unsatisfactory."""
+    def process_outcome(self, entity: 'Entity') -> float: #apply satisfaction penalty if food is unsatisfactory
         if dist.sample_uniform_01() < self.cfg.food_unsatisfied_prob:
             entity.update_satisfaction(-self.cfg.food_unsatisfied_penalty)
             return -self.cfg.food_unsatisfied_penalty
         return 0.0
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Concert Stage  (capacity-limited arena)
-# ─────────────────────────────────────────────────────────────────────────────
 
 class Stage:
     """
@@ -405,54 +319,44 @@ class Stage:
     """
 
     def __init__(self, name: str, capacity: int, genre: str, genre_weight: int):
-        self.name:             str            = name
-        self.capacity:         int            = capacity
-        self.genre:            str            = genre
-        self.genre_weight:     int            = genre_weight
+        self.name:             str            = name #Stage identifier
+        self.capacity:         int            = capacity #Maximum simultaneous guests
+        self.genre:            str            = genre #Music genre label
+        self.genre_weight:     int            = genre_weight #G value for satisfaction formula — the higher it is, the bigger the impact on satisfaction
 
-        self.current_guests:   int            = 0
-        self.audience:         List[Tuple['Entity', int]] = []  # (entity, entry_order)
-        self.queue:            Deque['Entity']= deque()
-        self.show_in_progress: bool           = False
-        self.show_end_time:    float          = 0.0
-        self.show_count:       int            = 0
-        self.entry_order_counter: int         = 0   # for position tracking
+        self.current_guests:   int            = 0 #amount of people currently inside the arena (for ex: a group of 3 counts as 3)
+        self.audience:         List[Tuple['Entity', int]] = []  # (entity, entry_order) #List of entities currently sitting inside the stage, along with their entry order
+        self.queue:            Deque['Entity']= deque() # FIFO line of entities waiting for the next show
+        self.show_in_progress: bool           = False #Whether a show is currently running
+        self.show_end_time:    float          = 0.0 # Simulation clock time when current show ends
+        self.show_count:       int            = 0 # Total number of completed shows
+        self.entry_order_counter: int         = 0 # counter to assign entry order numbers to entities as they enter the arena
 
-    def available_capacity(self) -> int:
-        """Real people that can still enter the arena."""
+    def available_capacity(self) -> int: # the available capacity in the arena 
         return self.capacity - self.current_guests
 
-    def queue_length(self) -> int:
+    def queue_length(self) -> int: # number of entities waiting in line for the next show 
         return len(self.queue)
 
-    def effective_queue_length(self) -> int:
-        """Used for shortest-queue routing decisions."""
+    def effective_queue_length(self) -> int: # combined measure of waiting + in service for routing decisions
         return len(self.queue)
 
-    def enqueue(self, entity: 'Entity') -> None:
+    def enqueue(self, entity: 'Entity') -> None: # Add an entity to the end of the queue for the next show
         self.queue.append(entity)
 
-    def admit_from_queue(self) -> List['Entity']:
-        """
-        Fill available arena spots from the queue using the MaxFill policy:
-        Go through the queue in order; admit an entity if it fits (size <=
-        available capacity).  Skip if it doesn't fit, check smaller entities.
-        Returns list of admitted entities.
-
-        Reference: "המדיניות היא שבכל הופעה יש להכניס את הכמות המקסימלית"
-        """
+    def admit_from_queue(self) -> List['Entity']: #Fill available arena spots from the queue using the MaxFill policy
         admitted = []
         remaining_queue = list(self.queue)
         self.queue.clear()
 
-        while remaining_queue:
+        while remaining_queue: # Check available capacity before admitting each entity
             avail = self.available_capacity()
             if avail <= 0:
                 break
 
             # Find first entity that fits
             admitted_one = False
-            for i, entity in enumerate(remaining_queue):
+            for i, entity in enumerate(remaining_queue): # find the first entity that can fit in the available capacity
                 if entity.size <= avail:
                     self._enter_arena(entity)
                     admitted.append(entity)
@@ -463,53 +367,36 @@ class Stage:
             if not admitted_one:
                 break  # Smallest remaining entity still doesn't fit
 
-        # Put unselected entities back in queue (preserve relative order)
+        # Put unselected entities back in queue
         self.queue.extend(remaining_queue)
         return admitted
 
-    def _enter_arena(self, entity: 'Entity') -> None:
-        """Record entity entering the arena."""
+    def _enter_arena(self, entity: 'Entity') -> None: # Mark an entity as admitted to the arena, update current guests and audience list
         self.entry_order_counter += 1
         self.current_guests += entity.size
         self.audience.append((entity, self.entry_order_counter))
 
-    def remove_from_audience(self, entity: 'Entity') -> None:
-        """Remove entity from arena (early leave or show end)."""
+    def remove_from_audience(self, entity: 'Entity') -> None: # Remove an entity from the audience, update current guests and audience list
         self.audience = [(e, o) for e, o in self.audience if e is not entity]
         self.current_guests -= entity.size
 
-    def get_back_row_entities(self) -> List['Entity']:
-        """
-        Return the 10 entities with the highest entry-order numbers
-        (i.e., the entities that entered last → furthest from stage).
-        Only relevant for MainStage early-leave logic.
-        """
-        if not self.audience:
+    def get_back_row_entities(self) -> List['Entity']: # Return the 10 entities with the highest entry-order numbers (the entities that entered last)
+        if not self.audience: # If the audience is empty, return an empty list
             return []
-        sorted_audience = sorted(self.audience, key=lambda x: x[1], reverse=True)
-        return [e for e, _ in sorted_audience[:10]]
+        sorted_audience = sorted(self.audience, key=lambda x: x[1], reverse=True) # Sort the audience by entry order in descending order
+        return [e for e, _ in sorted_audience[:10]] 
 
     def start_show(self, show_end_time: float) -> List['Entity']:
-        """
-        Begin a new performance.  Clears audience, fills from queue, marks
-        show as in-progress.
-        Returns the list of entities that just entered.
-        """
-        self.show_in_progress = True
-        self.show_end_time    = show_end_time
-        self.show_count      += 1
-        self.entry_order_counter = 0
-        self.current_guests  = 0
-        self.audience        = []
+        self.show_in_progress = True # Mark the show as in progress
+        self.show_end_time    = show_end_time # Set the show end time
+        self.show_count      += 1 # Increase the show count by 1
+        self.entry_order_counter = 0 # Reset the entry order counter for the new show
+        self.current_guests  = 0 # Reset current guests to 0
+        return self.admit_from_queue() 
 
-        return self.admit_from_queue()
-
-    def end_show(self) -> List['Entity']:
-        """
-        End the current performance.  Returns all entities that were inside.
-        """
+    def end_show(self) -> List['Entity']: # End the current performance.  Returns all entities that were inside.
         self.show_in_progress = False
-        departed = [e for e, _ in self.audience]
+        departed = [e for e, _ in self.audience] # Get the list of entities that were in the audience before clearing it
         self.audience        = []
         self.current_guests  = 0
         return departed
@@ -523,29 +410,21 @@ class Stage:
             where G = genre weight (3=mainstream, 2=indie, 1=electronic)
                   T = hour (integer) when show ended
         With probability 0.5: negative experience → -1.0
-
-        Reference: specification page 6.
         """
-        if dist.sample_uniform_01() < 0.5:
-            # Positive experience
-            # show_end_time is in minutes from midnight of day 1, so a day-2
-            # show ending at 19:00 would give T = 30 with int(t/60). We need
-            # the *hour of day* (1-24), so wrap via modulo 24.
-            T = int(show_end_time / 60) % 24
-            G = self.genre_weight
+        if dist.sample_uniform_01() < 0.5: # Positive experience 
+            T = int(show_end_time / 60) % 24 # Get the hour of the day (0-23)
+            G = self.genre_weight # Get the genre weight for the stage
             return (G - 1) / 2.0 + (T - 1) / 19.0
-        else:
+        else: # Negative experience
             return -1.0
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str: # representation of the stage
         return (f"{self.name}(capacity={self.capacity}, "
                 f"guests={self.current_guests}, queue={self.queue_length()}, "
                 f"show={'ON' if self.show_in_progress else 'OFF'})")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
 # Specialised stages
-# ─────────────────────────────────────────────────────────────────────────────
 
 class MainStage(Stage):
     """
