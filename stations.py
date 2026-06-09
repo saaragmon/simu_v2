@@ -431,7 +431,7 @@ class MainStage(Stage):
     Mainstream concerts (capacity 200, 10-min break between shows).
 
     Show duration ~ Normal(mu=45.90, sigma=8.97) minutes, fitted from
-    100 real samples (KS test passed at alpha=0.10). Minimum 10 minutes.
+    100 real samples (KS test passed at alpha=0.05).
 
     Special rule: last 10 entities (back rows) may leave 15 min into the show
     with probability 0.5.
