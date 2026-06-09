@@ -35,7 +35,7 @@ import time
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import SimConfig
-from engine import SimulationEngine
+from engine import Simulation
 from sim_stats import MultiRunStatistics, RunStatistics
 from alternatives import (
     build_baseline, build_combo_a, build_combo_b, ALL_ALTERNATIVES
@@ -100,7 +100,7 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
     Execute `num_runs` independent replications of the given scenario.
 
     Each replication:
-        - starts a fresh SimulationEngine
+        - starts a fresh Simulation
         - injects the fitted distribution samplers
         - seeds the RNG deterministically (base_seed + i)
         - runs the 2-day festival
@@ -116,13 +116,13 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
 
     for i in range(num_runs):
         t0 = time.time()
-        engine = SimulationEngine(
+        sim = Simulation(
             cfg,
             friends_arrival_sampler=friends_sampler,
             main_stage_duration_sampler=main_stage_sampler,
             verbose=(verbose and i == 0),   # only log the first run
         )
-        stats = engine.run(seed=base_seed + i)
+        stats = sim.run(seed=base_seed + i)
         multi.add_run(stats)
         elapsed = time.time() - t0
         s = stats.summary()

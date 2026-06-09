@@ -49,13 +49,13 @@ from stations import Festival, DJStage
 from sim_stats import RunStatistics, EntityRecord
 
 
-class SimulationEngine:
+class Simulation:
     """
     Event-driven simulation engine.
 
     Usage:
-        engine = SimulationEngine(cfg)
-        stats  = engine.run()
+        sim   = Simulation(cfg)
+        stats = sim.run()
     """
 
     def __init__(self, cfg, friends_arrival_sampler=None,

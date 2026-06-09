@@ -47,7 +47,7 @@ That is the whole DES. The 18 event types in `events.py` get routed by
 
 | Concept              | In the code                              |
 | -------------------- | ---------------------------------------- |
-| Clock                | `self.clock: float` in SimulationEngine  |
+| Clock                | `self.clock: float` in Simulation        |
 | Event list           | `self.heap: List[Event]` (a heapq min-heap) |
 | Event                | `@dataclass(order=True) Event` in events.py |
 | Tie-break ordering   | `tie_break` field auto-incremented in `make_event()` |

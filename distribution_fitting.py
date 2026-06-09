@@ -10,7 +10,7 @@ After fitting, returns callable samplers that can be injected into the engine.
 Usage:
     from distribution_fitting import fit_from_excel
     samplers = fit_from_excel('samples_for_simulation.xlsx')
-    engine = SimulationEngine(
+    sim = Simulation(
         cfg,
         friends_arrival_sampler     = samplers['friends_interarrival'],
         main_stage_duration_sampler = samplers['main_stage_duration'],
