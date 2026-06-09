@@ -84,35 +84,23 @@ class Entity:
 
     def update_satisfaction(self, delta):
         """Update satisfaction, then clamp to [0, 10]."""
-        self.satisfaction += delta
-
-        if self.satisfaction > 10:
-            self.satisfaction = 10
-
-        if self.satisfaction < 0:
-            self.satisfaction = 0
+        self.satisfaction = max(0, min(10, self.satisfaction + delta))
 
     # ── Routing ───────────────────────────────────────────────────────────────
 
     def next_activity(self):
         """Return and consume the next planned activity, or None if done."""
-        if len(self.activity_plan) > 0:
-            next_step = self.activity_plan.pop(0)
-            return next_step
-        return None
+        return self.activity_plan.pop(0) if self.activity_plan else None
 
     def peek_next_activity(self):
         """Return the next planned activity without consuming it."""
-        if len(self.activity_plan) > 0:
-            return self.activity_plan[0]
-        return None
+        return self.activity_plan[0] if self.activity_plan else None
 
     # ── Patience ──────────────────────────────────────────────────────────────
 
     def get_patience(self) -> float:
         """Maximum queue wait time (minutes) before abandonment."""
-        raise NotImplementedError 
-    #שגיאה המותאמת לזמן ההמתנה המקסימלי של כל ישות
+        raise NotImplementedError
     
     # ── Pricing ───────────────────────────────────────────────────────────────
 
@@ -129,15 +117,6 @@ class Entity:
         return (f"{self.entity_type}(id={self.entity_id}, "
                 f"size={self.size}, day={self.day}, "
                 f"satisfaction={self.satisfaction:.2f})")
-    ### אופציה לכתיבת חלופית:
-    #def __repr__(self):
-    #text = self.entity_type
-    #text += " ID=" + str(self.entity_id)
-    #text += " Size=" + str(self.size)
-    #text += " Day=" + str(self.day)
-    #text += " Satisfaction=" + str(round(self.satisfaction, 2))
-    #return text
-    
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FriendsGroup
@@ -228,25 +207,15 @@ class Couple(Entity):
     def __init__(self, arrival_time: float, day: int, cfg: SimConfig):
         super().__init__('Couple', 2, arrival_time, day, cfg)
         # Couples start with a show
-        self._schedule_next_show()
-
-    def _schedule_next_show(self) -> None:
-        """Append a randomly chosen show to the plan."""
-        show = random.choice(self._SHOWS)
-        self.activity_plan.append(show)
-
-    def _schedule_next_station(self) -> None:
-        """Append a randomly chosen station to the plan."""
-        station = random.choice(self._STATIONS)
-        self.activity_plan.append(station)
+        self.activity_plan.append(random.choice(self._SHOWS))
 
     def on_show_completed(self) -> None:
-        """After a show, schedule one station."""
-        self._schedule_next_station()
+        """After a show, schedule one randomly chosen station."""
+        self.activity_plan.append(random.choice(self._STATIONS))
 
     def on_station_completed(self) -> None:
-        """After a station, schedule one show."""
-        self._schedule_next_show()
+        """After a station, schedule one randomly chosen show."""
+        self.activity_plan.append(random.choice(self._SHOWS))
 
     def should_stay_overnight(self) -> bool:
         """Return True if couple's satisfaction qualifies them for overnight stay."""
