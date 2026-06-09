@@ -430,8 +430,8 @@ class MainStage(Stage):
     """
     Mainstream concerts (capacity 200, 10-min break between shows).
 
-    Durations come from the Excel sample data (distribution fitted separately).
-    Default fallback: Exponential(60) minutes (placeholder until data fitted).
+    Show duration ~ Normal(mu=45.90, sigma=8.97) minutes, fitted from
+    100 real samples (KS test passed at alpha=0.10). Minimum 10 minutes.
 
     Special rule: last 10 entities (back rows) may leave 15 min into the show
     with probability 0.5.
@@ -445,12 +445,11 @@ class MainStage(Stage):
         self.early_leave_delay = cfg.main_stage_early_leave_delay
 
         # Duration sampler: callable → float (minutes)
-        # Should be replaced after distribution fitting.
         self._duration_sampler = duration_sampler or self._default_duration
 
     def _default_duration(self) -> float:
-        """Placeholder until Excel data is fitted. Exponential mean=60 min."""
-        return dist.sample_exponential(60.0)
+        """Show duration ~ Normal(45.90, 8.97) fitted from Excel data. Minimum 10 min."""
+        return max(dist.sample_normal(45.90, 8.97), 10.0)
 
     def sample_show_duration(self) -> float:
         return self._duration_sampler()
