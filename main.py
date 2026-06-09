@@ -6,15 +6,14 @@ Entry point for the Queuechella Festival Simulation.
 This script is the "front desk" of the simulation. It:
     1. Loads the Excel sample data and fits distributions
        (Exponential / Normal / Uniform via KS goodness-of-fit).
-    2. Runs a small PILOT study on the baseline configuration.
-    3. Uses the pilot variance to estimate how many replications are
-       needed for relative precision δ at confidence level 1 - α.
-    4. Runs that many replications of the BASELINE and of each
-       ALTERNATIVE combination.
-    5. Builds Student-t confidence intervals for every KPI.
-    6. Compares each alternative to the baseline with Welch's two-sample
+    2. Runs the BASELINE configuration for the chosen number of
+       replications (default 20).
+    3. Runs each ALTERNATIVE combination with the same replication count
+       so the comparisons are fair.
+    4. Builds Student-t confidence intervals for every KPI.
+    5. Compares each alternative to the baseline with Welch's two-sample
        t-test (independent samples; no Common Random Numbers).
-    7. Picks the best alternative per KPI, respecting which direction is
+    6. Picks the best alternative per KPI, respecting which direction is
        "better" (e.g. higher satisfaction good, lower visit duration good).
 
 Usage:
@@ -50,9 +49,9 @@ from distribution_fitting import fit_from_excel
 EXCEL_PATH = os.path.join(os.path.dirname(__file__),
                           'samples_for_simulation.xlsx')
 
-# Pilot study: a small batch used to estimate the variance of the KPI
-# we want to control. Five replications is a common starting point.
-PILOT_RUNS = 20
+# Default number of replications per scenario. The user can override
+# this with the --runs CLI flag.
+DEFAULT_RUNS = 20
 
 # Required by the project spec: confidence level 0.95 (α = 0.05) and relative
 # precision 0.1 for every comparison.
@@ -178,8 +177,8 @@ def main(args):
         The model has 3 entity types (FriendsGroup, Couple, Single),
         6 service stations, and 3 concert stages.  The engine is
         event-driven: a min-heap of Event objects, each calling
-        event.handle(sim) when popped — same architecture as the
-        example HotelSimulation project from Tutorial 6.
+        event.handle(simulation) when popped — same architecture as
+        the example HotelSimulation project from Tutorial 6.
     """)
 
     # ── Step 1: Distribution fitting ─────────────────────────────────────────
@@ -210,7 +209,7 @@ def main(args):
         print("\n  Skipping Excel fitting — using built-in defaults.")
 
     # ── Step 2: Full baseline run ────────────────────────────────────────────
-    total_runs = args.runs if args.runs else PILOT_RUNS
+    total_runs = args.runs if args.runs else DEFAULT_RUNS
     baseline_alt = build_baseline()
 
     section("[2] Full baseline ({} replications)".format(total_runs))
@@ -228,7 +227,7 @@ def main(args):
     )
     print(baseline_stats.report())
 
-    # ── Step 5: Alternative scenarios ────────────────────────────────────────
+    # ── Step 3: Alternative scenarios ────────────────────────────────────────
     section("[3] Alternative scenarios")
     paragraph("""
         We picked two budget-feasible combinations of the seven
@@ -267,7 +266,7 @@ def main(args):
     )
     print(combo_b_stats.report())
 
-    # ── Step 6: Statistical comparison ───────────────────────────────────────
+    # ── Step 4: Statistical comparison ───────────────────────────────────────
     section("[4] Statistical comparison (Welch's two-sample t-test)")
     paragraph("""
         Welch's t-test is appropriate because the replications across
@@ -285,7 +284,7 @@ def main(args):
     print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name)
     print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name)
 
-    # ── Step 7: Recommendations ──────────────────────────────────────────────
+    # ── Step 5: Recommendations ──────────────────────────────────────────────
     section("FINAL RECOMMENDATIONS")
     paragraph("""
         For each KPI we report which scenario delivered the best mean,
