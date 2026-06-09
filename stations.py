@@ -22,12 +22,12 @@ All stations expose a common interface:
 """
 
 from __future__ import annotations
-from collections import deque
-from typing import Deque, List, Optional, Tuple, TYPE_CHECKING
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 from config import SimConfig
 import distributions as dist
 from algorithm_sample import AlgorithmSample
+from queue_server import QueueServer
 
 if TYPE_CHECKING:
     from entities import Entity
@@ -41,20 +41,18 @@ class ServiceStation:
         self.name:         str               = name #Station identifier
         self.num_servers:  int               = num_servers # Total number of parallel servers
         self.busy_servers: int               = 0 #Currently occupied server count
-        self.queue:        Deque['Entity']   = deque() # FIFO waiting line
+        self.queue:        QueueServer       = QueueServer(name) # FIFO waiting line with built-in stats
 
     # ── Queue management ──────────────────────────────────────────────────────
 
-    def enqueue(self, entity: 'Entity') -> None: # Add entity to the end of the queue
-        self.queue.append(entity) 
+    def enqueue(self, entity: 'Entity', time: float) -> None: # Add entity to the end of the queue at the given clock time
+        self.queue.add(entity, time)
 
-    def dequeue(self): # Remove and return the next entity in line
-        if len(self.queue) > 0:
-            return self.queue.popleft() 
-        return None
+    def dequeue(self, time: float): # Remove and return the next entity in line (records its wait time)
+        return self.queue.pop(time)
 
     def queue_length(self) -> int:# Current number of entities waiting in line
-        return len(self.queue) 
+        return self.queue.size()
 
     def is_server_available(self) -> bool:# True if at least one server is free
         return self.busy_servers < self.num_servers 
@@ -327,49 +325,45 @@ class Stage:
 
         self.current_guests:   int            = 0 #amount of people currently inside the arena (for ex: a group of 3 counts as 3)
         self.audience:         List[Tuple['Entity', int]] = []  # (entity, entry_order) #List of entities currently sitting inside the stage, along with their entry order
-        self.queue:            Deque['Entity']= deque() # FIFO line of entities waiting for the next show
+        self.queue:            QueueServer    = QueueServer(name) # FIFO line with built-in stats, waits for the next show
         self.show_in_progress: bool           = False #Whether a show is currently running
         self.show_end_time:    float          = 0.0 # Simulation clock time when current show ends
         self.show_count:       int            = 0 # Total number of completed shows
         self.entry_order_counter: int         = 0 # counter to assign entry order numbers to entities as they enter the arena
 
-    def available_capacity(self) -> int: # the available capacity in the arena 
+    def available_capacity(self) -> int: # the available capacity in the arena
         return self.capacity - self.current_guests
 
-    def queue_length(self) -> int: # number of entities waiting in line for the next show 
-        return len(self.queue)
+    def queue_length(self) -> int: # number of entities waiting in line for the next show
+        return self.queue.size()
 
     def effective_queue_length(self) -> int: # combined measure of waiting + in service for routing decisions
-        return len(self.queue)
+        return self.queue.size()
 
-    def enqueue(self, entity: 'Entity') -> None: # Add an entity to the end of the queue for the next show
-        self.queue.append(entity)
+    def enqueue(self, entity: 'Entity', time: float) -> None: # Add an entity to the end of the queue at the given clock time
+        self.queue.add(entity, time)
 
-    def admit_from_queue(self) -> List['Entity']: #Fill available arena spots from the queue using the MaxFill policy
+    def admit_from_queue(self, current_time: float) -> List['Entity']: #Fill available arena spots from the queue using the MaxFill policy
         admitted = []
-        remaining_queue = list(self.queue)
-        self.queue.clear()
 
-        while remaining_queue: # Check available capacity before admitting each entity
+        while True: # Check available capacity before admitting each entity
             avail = self.available_capacity()
             if avail <= 0:
                 break
 
-            # Find first entity that fits
+            # Find first entity in the queue that fits
             admitted_one = False
-            for i, entity in enumerate(remaining_queue): # find the first entity that can fit in the available capacity
+            for i, (entity, _arrival) in enumerate(self.queue.server_queue):
                 if entity.size <= avail:
+                    self.queue.pop_at(i, current_time)
                     self._enter_arena(entity)
                     admitted.append(entity)
-                    remaining_queue.pop(i)
                     admitted_one = True
                     break
 
             if not admitted_one:
                 break  # Smallest remaining entity still doesn't fit
 
-        # Put unselected entities back in queue
-        self.queue.extend(remaining_queue)
         return admitted
 
     def _enter_arena(self, entity: 'Entity') -> None: # Mark an entity as admitted to the arena, update current guests and audience list
@@ -387,13 +381,13 @@ class Stage:
         sorted_audience = sorted(self.audience, key=lambda x: x[1], reverse=True) # Sort the audience by entry order in descending order
         return [e for e, _ in sorted_audience[:10]] 
 
-    def start_show(self, show_end_time: float) -> List['Entity']:
+    def start_show(self, show_end_time: float, current_time: float) -> List['Entity']:
         self.show_in_progress = True # Mark the show as in progress
         self.show_end_time    = show_end_time # Set the show end time
         self.show_count      += 1 # Increase the show count by 1
         self.entry_order_counter = 0 # Reset the entry order counter for the new show
         self.current_guests  = 0 # Reset current guests to 0
-        return self.admit_from_queue() 
+        return self.admit_from_queue(current_time)
 
     def end_show(self) -> List['Entity']: # End the current performance.  Returns all entities that were inside.
         self.show_in_progress = False

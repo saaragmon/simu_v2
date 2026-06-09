@@ -293,8 +293,8 @@ class Simulation:
         if not station.is_server_available():
             return  # No usable server right now — leave queue intact.
 
-        while station.queue:
-            next_entity = station.queue.popleft()
+        while not station.queue.is_empty():
+            next_entity = station.queue.pop(self.clock)
             self._cancel_abandon(next_entity.entity_id)
             if next_entity.departed:
                 continue
