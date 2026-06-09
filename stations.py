@@ -27,6 +27,7 @@ from typing import Deque, List, Optional, Tuple, TYPE_CHECKING
 
 from config import SimConfig
 import distributions as dist
+from algorithm_sample import AlgorithmSample
 
 if TYPE_CHECKING:
     from entities import Entity
@@ -449,7 +450,7 @@ class MainStage(Stage):
 
     def _default_duration(self) -> float:
         """Show duration ~ Normal(45.90, 8.97) fitted from Excel data. Minimum 10 min."""
-        return max(dist.sample_normal(45.90, 8.97), 10.0)
+        return AlgorithmSample.main_stage_duration(45.90, 8.97)
 
     def sample_show_duration(self) -> float:
         return self._duration_sampler()
