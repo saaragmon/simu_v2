@@ -84,10 +84,13 @@ class EntityArriveEvent(Event):
         sim._active_entities.add(entity)
 
         gate = sim.festival.entry_gate
-        gate.enqueue(entity)
+        gate.enqueue(entity, sim.clock)
 
         if gate.is_server_available():
             gate.acquire_server()
+            # Pop the entity we just enqueued — it gets served immediately
+            # so its recorded wait is zero (it never really waits).
+            gate.dequeue(sim.clock)
             service_time = gate.sample_service_time()
             sim.schedule_event(
                 EntryServiceEndEvent(sim.clock + service_time, entity))
@@ -111,7 +114,7 @@ class EntryServiceEndEvent(Event):
         gate.release_server()
 
         # Serve next entity in queue
-        next_entity = gate.dequeue()
+        next_entity = gate.dequeue(sim.clock)
         if next_entity is not None:
             gate.acquire_server()
             service_time = gate.sample_service_time()
@@ -186,12 +189,12 @@ class StageQueueJoinEvent(Event):
                                       stage_name=self.stage_name,
                                       entity=entity))
             else:
-                stage.enqueue(entity)
+                stage.enqueue(entity, sim.clock)
         else:
             # Main / Side stage: queue until the next show admits us
-            stage.enqueue(entity)
+            stage.enqueue(entity, sim.clock)
             if stage.show_in_progress:
-                admitted = stage.admit_from_queue()
+                admitted = stage.admit_from_queue(sim.clock)
                 for e in admitted:
                     sim.schedule_event(
                         StageEnterEvent(sim.clock, e, self.stage_name))
@@ -234,7 +237,7 @@ class StageEarlyLeaveEvent(Event):
         if dist.sample_uniform_01() < sim.cfg.main_stage_early_leave_prob:
             stage.remove_from_audience(entity)
             # Pull replacements from queue
-            admitted = stage.admit_from_queue()
+            admitted = stage.admit_from_queue(sim.clock)
             for e in admitted:
                 sim.schedule_event(
                     StageEnterEvent(sim.clock, e, self.stage_name))
@@ -268,8 +271,8 @@ class StageShowEndEvent(Event):
             self.entity.update_satisfaction(delta)
 
             # Try to admit waiting entities
-            while dj_stage.queue and dj_stage.available_capacity() > 0:
-                next_e = dj_stage.queue.popleft()
+            while not dj_stage.queue.is_empty() and dj_stage.available_capacity() > 0:
+                next_e = dj_stage.queue.pop(sim.clock)
                 if dj_stage.enter(next_e):
                     dur = dj_stage.sample_stay_duration()
                     sim.schedule_event(
@@ -323,7 +326,7 @@ class StageBreakEndEvent(Event):
             show_end = day_end
 
         # Start the show and admit from queue
-        admitted = stage.start_show(show_end)
+        admitted = stage.start_show(show_end, sim.clock)
         for entity in admitted:
             sim.schedule_event(
                 StageEnterEvent(sim.clock, entity, self.stage_name))
@@ -362,7 +365,7 @@ class StationQueueJoinEvent(Event):
                                        self.all_stations_mode))
         else:
             # All servers busy: join queue, schedule patience abandonment
-            station.enqueue(entity)
+            station.enqueue(entity, sim.clock)
             entity.queue_join_time = sim.clock
             patience = entity.get_patience()
             abandon = StationAbandonEvent(
@@ -389,7 +392,7 @@ class StationServiceEndEvent(Event):
         if self.station_name == 'BodyArt_break_end':
             sim.festival.body_art.artist_break_done(self.artist_idx)
             ba = sim.festival.body_art
-            if ba.queue and ba.is_server_available():
+            if not ba.queue.is_empty() and ba.is_server_available():
                 sim._try_serve_next(ba, 'BodyArt')
             return
 
@@ -431,9 +434,7 @@ class StationAbandonEvent(Event):
 
         del sim._abandon_events[entity.entity_id]
 
-        try:
-            station.queue.remove(entity)
-        except ValueError:
+        if not station.queue.remove(entity, sim.clock):
             return  # Entity was already removed somehow
 
         sim.stats.record_abandonment(self.station_name)
@@ -471,7 +472,7 @@ class FoodQueueJoinEvent(Event):
                 FoodServiceEndEvent(sim.clock + service_time,
                                     entity, self.station_name))
         else:
-            station.enqueue(entity)
+            station.enqueue(entity, sim.clock)
             entity.queue_join_time = sim.clock
 
 
@@ -494,7 +495,7 @@ class FoodServiceEndEvent(Event):
         station.process_outcome(entity)
 
         # Serve next in queue
-        next_entity = station.dequeue()
+        next_entity = station.dequeue(sim.clock)
         if next_entity is not None:
             station.acquire_server()
             wait = sim.clock - (next_entity.queue_join_time or sim.clock)
