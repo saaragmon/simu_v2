@@ -93,13 +93,16 @@ class EntryGate(ServiceStation):
         security_time = dist.sample_exponential(self.cfg.entry_security_mean)
         return scan_time + security_time
 
-    def process_entry(self, entity: 'Entity', stats) -> None:
-        """Charge the entry ticket (and overnight fee for FriendsGroup pre-committed
-        to staying) and record the revenue on the festival statistics."""
+    def process_entry(self, entity: 'Entity') -> None:
+        """Charge the entry ticket (and overnight fee for FriendsGroup
+        pre-committed to staying). The fee accumulates on entity.spending;
+        the festival's total_revenue picks it up at departure via
+        RunStatistics.record_entity, so we do NOT add to total_revenue
+        here — doing so would double-count this fee at the end of the run.
+        """
         has_overnight = (entity.entity_type == 'FriendsGroup'
                          and getattr(entity, 'stays_overnight', False))
         entity.pay_entry(has_overnight)
-        stats.total_revenue += entity.spending
 
 
 # Photo Station
@@ -549,12 +552,14 @@ class Festival:
     def get_station(self, name: str): # Return the station or stage object by name
         return self.stations.get(name) or self.stages.get(name)
 
-    def charge_overnight(self, entity: 'Entity', stats) -> float:
+    def charge_overnight(self, entity: 'Entity') -> float:
         """Charge the overnight fee for an entity that decided to stay over.
-        Updates entity.spending and stats.total_revenue."""
+        Only updates entity.spending — total_revenue picks this up at
+        departure via RunStatistics.record_entity. Adding it here too
+        would double-count the fee at the end of the run.
+        """
         fee = self.cfg.overnight_price * entity.size
         entity.spending += fee
-        stats.total_revenue += fee
         return fee
 
     def shortest_queue_station(self, #Return the name of the service station with the shortest effective queue (queue length + busy servers)

@@ -40,6 +40,7 @@ from alternatives import (
     build_baseline, build_combo_a, build_combo_b, ALL_ALTERNATIVES
 )
 from distribution_fitting import fit_from_excel
+from plotting import RunPlotter, KPIComparisonPlotter
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -53,13 +54,14 @@ EXCEL_PATH = os.path.join(os.path.dirname(__file__),
 # this with the --runs CLI flag.
 DEFAULT_RUNS = 20
 
-# Required by the project spec: confidence level 0.95 (α = 0.05) and relative
-# precision 0.1 for every comparison.
-CONFIDENCE_LEVEL = 0.95
+# Required by the project spec (p. 7): confidence level 0.9 (α = 0.1) and
+# relative precision 0.1 for every comparison.
+CONFIDENCE_LEVEL = 0.9
 RELATIVE_PRECISION = 0.10
 
 # KPIs we will optimise / compare across scenarios.
-KPIS_TO_COMPARE = ['avg_satisfaction', 'avg_visit_duration', 'total_revenue']
+KPIS_TO_COMPARE = ['avg_satisfaction', 'avg_visit_duration',
+                   'total_revenue', 'total_entities', 'avg_queue_length']
 
 # For each KPI, is "higher" the better outcome?
 # Used both in the recommendation (max vs min) and in the comparison
@@ -69,6 +71,7 @@ KPI_HIGHER_IS_BETTER = {
     'avg_visit_duration': False,   # less time stuck in queues = better
     'total_revenue':      True,
     'total_entities':     True,
+    'avg_queue_length':   False,   # shorter queues = better
 }
 
 
@@ -94,7 +97,7 @@ def paragraph(text):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
-                 verbose=False, base_seed=1000):
+                 verbose=False, base_seed=1000, plot=False):
     """
     Execute `num_runs` independent replications of the given scenario.
 
@@ -104,6 +107,8 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
         - seeds the RNG deterministically (base_seed + i)
         - runs the 2-day festival
         - returns a RunStatistics object summarising the run
+
+    If `plot=True`, every run also saves a dashboard PNG to `plots/`.
 
     All scenarios share the same base_seed default, so run i of every
     scenario sees the same random stream → Common Random Numbers (CRN).
@@ -129,6 +134,10 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
               "revenue={:,.0f} NIS  ({:.2f}s)".format(
                   i + 1, num_runs, s['total_entities'],
                   s['avg_satisfaction'], s['total_revenue_NIS'], elapsed))
+
+        if plot:
+            label = '{}_run{:02d}'.format(name, i + 1)
+            RunPlotter(stats, name=label).plot_all(show=False, save=True)
 
     return multi
 
@@ -224,6 +233,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        plot=args.plot,
     )
     print(baseline_stats.report())
 
@@ -253,6 +263,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        plot=args.plot,
     )
     print(combo_a_stats.report())
 
@@ -263,6 +274,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        plot=args.plot,
     )
     print(combo_b_stats.report())
 
@@ -311,6 +323,19 @@ def main(args):
 
     print("=" * 70)
 
+    # ── Step 6: KPI comparison plots ────────────────────────────────────────
+    if args.plot:
+        section("[5] KPI comparison plots")
+        scenarios = {
+            'Baseline':       baseline_stats,
+            combo_a_alt.name: combo_a_stats,
+            combo_b_alt.name: combo_b_stats,
+        }
+        KPIComparisonPlotter(
+            scenarios,
+            kpi_higher_better=KPI_HIGHER_IS_BETTER,
+        ).plot_all_kpis(KPIS_TO_COMPARE, show=False, save=True)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI entry point
@@ -325,5 +350,7 @@ if __name__ == '__main__':
                         help='Print event log for the first run of each scenario.')
     parser.add_argument('--no-fit', action='store_true',
                         help='Skip Excel distribution fitting; use defaults.')
+    parser.add_argument('--plot', action='store_true',
+                        help='Save a per-run dashboard PNG to plots/ for every replication.')
     args = parser.parse_args()
     main(args)

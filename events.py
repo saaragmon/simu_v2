@@ -103,7 +103,7 @@ class EntryServiceEndEvent(Event):
         entity = self.entity
         gate = simulation.festival.entry_gate
 
-        gate.process_entry(entity, simulation.stats)
+        gate.process_entry(entity)
         gate.release_server()
 
         # Serve next entity in queue
@@ -575,7 +575,7 @@ class DayEndEvent(Event):
             if self.day == 1:
                 if isinstance(entity, Couple):
                     if entity.should_stay_overnight():
-                        simulation.festival.charge_overnight(entity, simulation.stats)
+                        simulation.festival.charge_overnight(entity)
                         entity.day = 2
                         simulation.stats.num_overnight += 1
                     else:
