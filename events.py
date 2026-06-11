@@ -100,17 +100,10 @@ class EntryServiceEndEvent(Event):
     """Entry service done: entity enters festival, server may take next."""
 
     def handle(self, simulation):
-        from entities import FriendsGroup
         entity = self.entity
         gate = simulation.festival.entry_gate
 
-        # Pay entry ticket (overnight pre-decided for FriendsGroup)
-        has_overnight = False
-        if isinstance(entity, FriendsGroup) and entity.stays_overnight:
-            has_overnight = True
-        entity.pay_entry(has_overnight)
-        simulation.stats.total_revenue += entity.spending
-
+        gate.process_entry(entity, simulation.stats)
         gate.release_server()
 
         # Serve next entity in queue
@@ -208,17 +201,15 @@ class StageEnterEvent(Event):
         self.stage_name = stage_name
 
     def handle(self, simulation):
+        from stations import MainStage
         entity = self.entity
         stage = simulation.festival.stages[self.stage_name]
 
-        if self.stage_name == 'MainStage':
-            back_row = stage.get_back_row_entities()
-            if entity in back_row:
-                # Schedule a possible early leave 15 min after entry
-                delay = simulation.cfg.main_stage_early_leave_delay
-                simulation.schedule_event(
-                    StageEarlyLeaveEvent(simulation.clock + delay,
-                                         entity, self.stage_name))
+        if isinstance(stage, MainStage) and stage.is_back_row(entity):
+            # Schedule a possible early leave 15 min after entry
+            simulation.schedule_event(
+                StageEarlyLeaveEvent(simulation.clock + stage.early_leave_delay,
+                                     entity, self.stage_name))
 
 
 class StageEarlyLeaveEvent(Event):
@@ -229,12 +220,10 @@ class StageEarlyLeaveEvent(Event):
         self.stage_name = stage_name
 
     def handle(self, simulation):
-        import distributions as dist
-
         entity = self.entity
         stage = simulation.festival.stages[self.stage_name]
 
-        if dist.sample_uniform_01() < simulation.cfg.main_stage_early_leave_prob:
+        if stage.decides_to_leave_early():
             stage.remove_from_audience(entity)
             # Pull replacements from queue
             admitted = stage.admit_from_queue(simulation.clock)
@@ -490,8 +479,7 @@ class FoodServiceEndEvent(Event):
         station.release_server()
 
         # Charge meal cost and apply satisfaction outcome
-        cost = station.calculate_meal_cost(entity)
-        entity.spending += cost
+        station.charge_meal(entity)
         station.process_outcome(entity)
 
         # Serve next in queue
@@ -587,9 +575,7 @@ class DayEndEvent(Event):
             if self.day == 1:
                 if isinstance(entity, Couple):
                     if entity.should_stay_overnight():
-                        overnight_fee = simulation.cfg.overnight_price * entity.size
-                        entity.spending += overnight_fee
-                        simulation.stats.total_revenue += overnight_fee
+                        simulation.festival.charge_overnight(entity, simulation.stats)
                         entity.day = 2
                         simulation.stats.num_overnight += 1
                     else:
