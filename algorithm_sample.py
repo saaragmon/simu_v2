@@ -87,7 +87,7 @@ class AlgorithmSample:
 
         elif u_pick < W1 + W2:
             # Piece 2: solve 4x² + 5x - 40C = 0
-            C = (5.0 / 8.0) * u_val + 4.0 / 10.0 + 2.0 / 8.0
+            C = (5.0 / 8.0) * u_val + 0.65
             disc = 25.0 + 4.0 * 4.0 * 40.0 * C
             return (-5.0 + math.sqrt(disc)) / (2.0 * 4.0)
 
@@ -110,13 +110,14 @@ class AlgorithmSample:
     @staticmethod
     def dj_stage_duration():
         """Sample DJStage stay duration using the Accept-Reject method."""
-        C   = 8.0 / 3.0   # acceptance constant
-        G   = 1.0 / 40.0  # proposal density (Uniform[20,60])
+        C    = 8.0 / 3.0   # acceptance constant
+        G    = 1.0 / 40.0  # proposal density (Uniform[20,60])
+        CG   = C * G       # pre-computed product (constant across iterations)
         while True:
             # Sample from proposal: Uniform[20, 60]
             x = 20.0 + 40.0 * random.random()
             u = random.random()
-            if u <= AlgorithmSample._dj_pdf(x) / (C * G):
+            if u <= AlgorithmSample._dj_pdf(x) / CG:
                 return x
 
     # BOX-MULLER ----------------------------------------------------------------------
@@ -152,8 +153,4 @@ class AlgorithmSample:
     def battery_level(mu=40.0, sigma=15.0):
         """Visitor battery level on arrival ~ Normal(40, 15), clamped to [0, 99.9]."""
         level = mu + sigma * AlgorithmSample._box_muller_standard()
-        if level < 0.0:
-            level = 0.0
-        if level > 99.9:
-            level = 99.9
-        return level
+        return max(0.0, min(99.9, level))
