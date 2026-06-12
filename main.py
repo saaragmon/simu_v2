@@ -37,7 +37,8 @@ from config import SimConfig
 from engine import Simulation
 from sim_stats import MultiRunStatistics, RunStatistics
 from alternatives import (
-    build_baseline, build_combo_a, build_combo_b, ALL_ALTERNATIVES
+    build_baseline, build_combo_a, build_combo_b, build_combo_c,
+    ALL_ALTERNATIVES,
 )
 from distribution_fitting import fit_from_excel
 from plotting import RunPlotter, KPIComparisonPlotter
@@ -240,17 +241,24 @@ def main(args):
     # ── Step 3: Alternative scenarios ────────────────────────────────────────
     section("[3] Alternative scenarios")
     paragraph("""
-        We picked two budget-feasible combinations of the seven
+        We evaluate three budget-feasible combinations of the seven
         improvement options listed in the project brief (budget cap
-        1,000,000 NIS):
+        1,000,000 NIS). Each combo was selected from the exhaustive
+        scan (see scan_alternatives.py) as the leader in one category:
 
-          Combo_A = Extra photo+art (150k) + Popular bands (300k)
+          Combo_A = Extra photo+art (150k) + Marketing (200k)
+                    + Auto ticket scanning (600k) = 950k NIS
+                    OVERALL WINNER: best rank-sum across all 5 KPIs.
+
+          Combo_B = Marketing (200k) + Auto ticket scanning (600k)
+                    + Visitor gift bag (200k) = 1,000k NIS
+                    REVENUE KING: highest total_revenue_NIS
+                    in the scan (+46.7% vs baseline).
+
+          Combo_C = Popular bands (300k) + Extra photo+art (150k)
                     + Visitor gift bag (200k) = 650k NIS
-                    Hypothesis: large satisfaction boost.
-
-          Combo_B = Better kitchen staff (500k) + Marketing (200k)
-                    = 700k NIS
-                    Hypothesis: higher throughput and revenue.
+                    SATISFACTION KING: highest avg_satisfaction
+                    in the scan (+31.1% vs baseline).
 
         Each combo is simulated with the same number of replications
         as the baseline so the comparisons are fair.
@@ -278,6 +286,17 @@ def main(args):
     )
     print(combo_b_stats.report())
 
+    combo_c_alt = build_combo_c()
+    combo_c_stats = run_scenario(
+        name=combo_c_alt.name,
+        cfg=combo_c_alt.config,
+        num_runs=total_runs,
+        friends_sampler=friends_sampler,
+        main_stage_sampler=main_stage_sampler,
+        plot=args.plot,
+    )
+    print(combo_c_stats.report())
+
     # ── Step 4: Statistical comparison ───────────────────────────────────────
     section("[4] Statistical comparison (Welch's two-sample t-test)")
     paragraph("""
@@ -295,6 +314,7 @@ def main(args):
 
     print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name)
     print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name)
+    print_comparison(baseline_stats, combo_c_stats, combo_c_alt.name)
 
     # ── Step 5: Recommendations ──────────────────────────────────────────────
     section("FINAL RECOMMENDATIONS")
@@ -308,10 +328,12 @@ def main(args):
             base_mean, *_ = baseline_stats.confidence_interval(kpi)
             a_mean, *_ = combo_a_stats.confidence_interval(kpi)
             b_mean, *_ = combo_b_stats.confidence_interval(kpi)
+            c_mean, *_ = combo_c_stats.confidence_interval(kpi)
             candidates = [
                 ('Baseline', base_mean),
                 (combo_a_alt.name, a_mean),
                 (combo_b_alt.name, b_mean),
+                (combo_c_alt.name, c_mean),
             ]
             selector = max if KPI_HIGHER_IS_BETTER.get(kpi, True) else min
             best = selector(candidates, key=lambda x: x[1])
@@ -330,6 +352,7 @@ def main(args):
             'Baseline':       baseline_stats,
             combo_a_alt.name: combo_a_stats,
             combo_b_alt.name: combo_b_stats,
+            combo_c_alt.name: combo_c_stats,
         }
         KPIComparisonPlotter(
             scenarios,
