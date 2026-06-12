@@ -1,26 +1,3 @@
-"""
-Every physical location in the festival is modelled as one of these classes:
-
-Service Stations  (queue + finite servers):
-    EntryGate       – ticket scan + security (2-phase serial service)
-    PhotoStation    – photo taking (3 booths, shared FIFO queue)
-    ChargingStation – phone charging (150 slots)
-    MerchTent       – merchandise purchases (7 cashiers)
-    BodyArtStation  – face/body painting (2 artists, mandatory breaks)
-    FoodStall       – food ordering + eating (3 separate restaurants)
-
-Concert Stages  (queue + capacity-limited arena):
-    MainStage       – mainstream shows, capacity 200, 10-min break
-    SideStage       – indie shows, capacity 100, 5-min break
-    DJStage         – continuous electronic, capacity 70 concurrent
-
-All stations expose a common interface:
-    enqueue(entity)  – add entity to the waiting line
-    dequeue()        – remove and return the next entity
-    is_busy()        – True if no server is free
-    queue_length()   – current length of the waiting line
-"""
-
 from __future__ import annotations
 from typing import List, Optional, Tuple, TYPE_CHECKING
 

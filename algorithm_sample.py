@@ -4,17 +4,7 @@ import random
 
 class AlgorithmSample:
 
-    # ─────────────────────────────────────────────────────────────────────
-    # INVERSE TRANSFORM
-    # ─────────────────────────────────────────────────────────────────────
-
-    # -- Exponential: inter-arrival times ----------------------------------
-    #
-    # CDF:     F(x) = 1 - e^(-x / mean)
-    # Inverse: x = -mean * ln(U)
-    #
-    # Used for: FriendsGroup, Couple, Single inter-arrival times,
-    #           and EntryGate security check duration.
+    # INVERSE TRANSFORM ----------------------------------------------------------------------
 
     @staticmethod
     def friends_interarrival_time(mean=15.0):
@@ -40,8 +30,7 @@ class AlgorithmSample:
         u = random.random()
         return -mean * math.log(u)
 
-    # -- Uniform (continuous): service times where only range is known -----
- 
+    # -- Uniform (continuous): service times where only range is known ----------------
 
     @staticmethod
     def entry_scan_duration(a=1.5, b=3.0):
@@ -81,26 +70,13 @@ class AlgorithmSample:
         else:  # asian
             return 3.0 + (7.0 - 3.0) * u
 
-    # ─────────────────────────────────────────────────────────────────────
-    # COMPOSITION
-    # ─────────────────────────────────────────────────────────────────────
-    #
-    # PhotoStation session duration (x in minutes):
-    #
-    #   f(x) = x/6,          1 <= x < 2   weight w1 = 1/4
-    #   f(x) = x/5 + 1/8,    2 <= x < 3   weight w2 = 5/8
-    #   f(x) = 1/8,          3 <= x < 4   weight w3 = 1/8
-    #
-    # For each piece the conditional inverse CDF is derived and used.
-    #
-    # Piece 1: F1(x) = (x² - 1) / 3   →  x = sqrt(1 + 3U)
-    # Piece 2: 4x² + 5x - 40C = 0,  C = 5U/8 + 0.65  →  quadratic formula
-    # Piece 3: F3(x) = x - 3  (uniform on [3,4])  →  x = 3 + U
+    
+    # COMPOSITION----------------------------------------------------------------------    
 
     @staticmethod
     def photo_station_duration():
         """Sample PhotoStation session duration using the Composition method."""
-        W1, W2 = 1/4, 5/8      # piece weights; W3 = 1/8 (the rest)
+        W1, W2 = 1/4, 5/8      # piece weights, W3 = 1/8 (the rest)
 
         u_pick = random.random()   # choose which piece
         u_val  = random.random()   # sample within that piece
@@ -119,21 +95,7 @@ class AlgorithmSample:
             # Piece 3: x = 3 + U  (uniform on [3, 4])
             return 3.0 + u_val
 
-    # ─────────────────────────────────────────────────────────────────────
-    # ACCEPT-REJECT
-    # ─────────────────────────────────────────────────────────────────────
-    #
-    # DJStage stay duration (x in minutes):
-    #
-    #   f(x) = (x - 20) / 600,              20 <= x <= 40
-    #   f(x) = (60 - x) / 600 + 1/30,       40 <  x <= 50
-    #   f(x) = (60 - x) / 600,              50 <  x <= 60
-    #
-    # Proposal g(x) = Uniform[20, 60]  →  g(x) = 1/40
-    # Maximum of f(x) = 1/15  (at x = 40 from the right)
-    # Acceptance constant c = f_max / g = (1/15) / (1/40) = 8/3
-    #
-    # Accept x if  U <= f(x) / (c * g(x))
+    # ACCEPT-REJECT ----------------------------------------------------------------------
 
     @staticmethod
     def _dj_pdf(x):
@@ -157,16 +119,7 @@ class AlgorithmSample:
             if u <= AlgorithmSample._dj_pdf(x) / (C * G):
                 return x
 
-    # ─────────────────────────────────────────────────────────────────────
-    # BOX-MULLER
-    # ─────────────────────────────────────────────────────────────────────
-    #
-    # Converts two independent U(0,1) variates into a Normal(mu, sigma):
-    #   Z = sqrt(-2 * ln(U1)) * cos(2π * U2)
-    #   X = mu + sigma * Z
-    #
-    # Used for: MainStage show duration, body-art glitter duration,
-    #           food ordering service time, and battery arrival level.
+    # BOX-MULLER ----------------------------------------------------------------------
 
     @staticmethod
     def _box_muller_standard():
