@@ -98,6 +98,7 @@ class RunStatistics:
         self.abandonments:       Dict[str, int]         = {}
         self.station_busy_time:  Dict[str, float]       = {}
         self.station_total_time: Dict[str, float]       = {}
+        self.queue_length_by_station: Dict[str, float]  = {}
         self.total_revenue:      float                  = 0.0
         self.num_overnight:      int                    = 0
 
@@ -158,6 +159,27 @@ class RunStatistics:
         }
 
     @property
+    def avg_queue_length(self):
+        """Mean time-weighted queue length across all service stations.
+
+        Each station's contribution is `(1/T) ∫ L(t) dt` where L(t) is its
+        queue length over the run. Lower is better — long queues mean
+        guests are stuck waiting.
+        """
+        values = list(self.queue_length_by_station.values())
+        if not values:
+            return 0.0
+        return sum(values) / len(values)
+
+    def record_queue_lengths(self, lengths_by_station):
+        """Snapshot the time-averaged queue length at each station.
+
+        Called by the engine after the run finishes:
+            stats.record_queue_lengths({'PhotoStation': 1.4, 'FoodStall_burger': 8.3, ...})
+        """
+        self.queue_length_by_station = dict(lengths_by_station)
+
+    @property
     def total_entities(self):
         """Number of entities that completed the simulation."""
         return len(self.entity_records)
@@ -197,6 +219,9 @@ class RunStatistics:
             'num_overnight':       self.num_overnight,
             'avg_queue_wait':      {k: round(v, 4)
                                     for k, v in self.avg_queue_wait.items()},
+            'avg_queue_length':    round(self.avg_queue_length, 4),
+            'queue_length_by_station': {k: round(v, 4)
+                                        for k, v in self.queue_length_by_station.items()},
             'abandonment_rate':    {k: round(v, 4)
                                     for k, v in self.abandonment_rate.items()},
         }
@@ -212,7 +237,7 @@ class MultiRunStatistics:
     standard suite of comparison tests.
     """
 
-    def __init__(self, confidence_level=0.90, relative_precision=0.10):
+    def __init__(self, confidence_level=0.95, relative_precision=0.10):
         self.confidence_level = confidence_level
         self.relative_precision = relative_precision
         self.runs: List[RunStatistics] = []
@@ -247,6 +272,7 @@ class MultiRunStatistics:
             'avg_visit_duration': lambda r: r.avg_visit_duration,
             'total_revenue':      lambda r: r.total_revenue,
             'total_entities':     lambda r: float(r.total_entities),
+            'avg_queue_length':   lambda r: r.avg_queue_length,
         }
         if kpi not in mapping:
             raise ValueError("Unknown KPI: " + kpi)
@@ -412,7 +438,8 @@ class MultiRunStatistics:
 
     def report(self):
         """
-        Print a textual summary of all KPIs with 90% confidence intervals.
+        Print a textual summary of all KPIs with confidence intervals
+        at the configured `confidence_level` (defaults to 95%).
         """
         lines = [
             "\n" + "=" * 60,
@@ -422,7 +449,8 @@ class MultiRunStatistics:
             "=" * 60,
         ]
         for kpi in ['avg_satisfaction', 'avg_visit_duration',
-                    'total_revenue', 'total_entities']:
+                    'total_revenue', 'total_entities',
+                    'avg_queue_length']:
             try:
                 mean, lo, hi = self.confidence_interval(kpi)
                 lines.append(

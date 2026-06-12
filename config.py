@@ -170,23 +170,25 @@ class SimConfig:
         return 1.0 - self.burger_prob - self.pizza_prob
 
     @property
-    def couple_arrival_rate_per_min(self) -> float:
-        """Convert from per-hour rate to per-minute rate."""
-        return self.couple_arrival_rate / 60.0
+    def couple_arrival_mean_min(self) -> float:
+        """Mean inter-arrival time (minutes) between Couple arrivals.
+
+        Spec: Couples arrive Exponential with rate 60/hour, i.e. one per
+        minute on average. So mean inter-arrival = 1 minute.
+        """
+        return 60.0 / self.couple_arrival_rate
 
     @property
-    def single_arrival_rate_per_min(self) -> float:
-        """
-        Convert the per-day Singles arrival rate to per-minute.
+    def single_arrival_mean_min(self) -> float:
+        """Mean inter-arrival time (minutes) between Single arrivals.
 
-        Per the project spec, Singles arrive only during a 7-hour window
-        (09:00-16:00 = 420 min), not over the full 11-hour festival day.
-        So `500 / day` means 500 expected arrivals spread over those 7
-        hours, giving a per-minute rate of 500 / 420.
+        Spec: Singles arrive Exponential with expectation 500 per day.
+        Singles only arrive in a 7-hour window (09:00-16:00 = 420 min).
+        So rate = 500/420 per minute  →  mean inter-arrival = 420/500
+        minutes.
         """
-        single_arrival_window_min = (
-            self.single_arrival_end - self.single_arrival_start)
-        return self.single_arrival_rate_per_day / single_arrival_window_min
+        window_min = self.single_arrival_end - self.single_arrival_start
+        return window_min / self.single_arrival_rate_per_day
 
 
 # ─── Pre-built alternative configs ────────────────────────────────────────────

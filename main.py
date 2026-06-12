@@ -6,15 +6,14 @@ Entry point for the Queuechella Festival Simulation.
 This script is the "front desk" of the simulation. It:
     1. Loads the Excel sample data and fits distributions
        (Exponential / Normal / Uniform via KS goodness-of-fit).
-    2. Runs a small PILOT study on the baseline configuration.
-    3. Uses the pilot variance to estimate how many replications are
-       needed for relative precision δ at confidence level 1 - α.
-    4. Runs that many replications of the BASELINE and of each
-       ALTERNATIVE combination.
-    5. Builds Student-t confidence intervals for every KPI.
-    6. Compares each alternative to the baseline with Welch's two-sample
+    2. Runs the BASELINE configuration for the chosen number of
+       replications (default 20).
+    3. Runs each ALTERNATIVE combination with the same replication count
+       so the comparisons are fair.
+    4. Builds Student-t confidence intervals for every KPI.
+    5. Compares each alternative to the baseline with Welch's two-sample
        t-test (independent samples; no Common Random Numbers).
-    7. Picks the best alternative per KPI, respecting which direction is
+    6. Picks the best alternative per KPI, respecting which direction is
        "better" (e.g. higher satisfaction good, lower visit duration good).
 
 Usage:
@@ -41,6 +40,7 @@ from alternatives import (
     build_baseline, build_combo_a, build_combo_b, ALL_ALTERNATIVES
 )
 from distribution_fitting import fit_from_excel
+from plotting import RunPlotter, KPIComparisonPlotter
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,17 +50,18 @@ from distribution_fitting import fit_from_excel
 EXCEL_PATH = os.path.join(os.path.dirname(__file__),
                           'samples_for_simulation.xlsx')
 
-# Pilot study: a small batch used to estimate the variance of the KPI
-# we want to control. Five replications is a common starting point.
-PILOT_RUNS = 5
+# Default number of replications per scenario. The user can override
+# this with the --runs CLI flag.
+DEFAULT_RUNS = 20
 
-# Required by the project spec: confidence level 0.9 and relative
-# precision 0.1 for every comparison.
-CONFIDENCE_LEVEL = 0.90
+# Required by the project spec (p. 7): confidence level 0.9 (α = 0.1) and
+# relative precision 0.1 for every comparison.
+CONFIDENCE_LEVEL = 0.9
 RELATIVE_PRECISION = 0.10
 
 # KPIs we will optimise / compare across scenarios.
-KPIS_TO_COMPARE = ['avg_satisfaction', 'avg_visit_duration', 'total_revenue']
+KPIS_TO_COMPARE = ['avg_satisfaction', 'avg_visit_duration',
+                   'total_revenue', 'total_entities', 'avg_queue_length']
 
 # For each KPI, is "higher" the better outcome?
 # Used both in the recommendation (max vs min) and in the comparison
@@ -70,6 +71,7 @@ KPI_HIGHER_IS_BETTER = {
     'avg_visit_duration': False,   # less time stuck in queues = better
     'total_revenue':      True,
     'total_entities':     True,
+    'avg_queue_length':   False,   # shorter queues = better
 }
 
 
@@ -95,7 +97,7 @@ def paragraph(text):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
-                 verbose=False, base_seed=1000):
+                 verbose=False, base_seed=1000, plot=False):
     """
     Execute `num_runs` independent replications of the given scenario.
 
@@ -105,6 +107,8 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
         - seeds the RNG deterministically (base_seed + i)
         - runs the 2-day festival
         - returns a RunStatistics object summarising the run
+
+    If `plot=True`, every run also saves a dashboard PNG to `plots/`.
 
     All scenarios share the same base_seed default, so run i of every
     scenario sees the same random stream → Common Random Numbers (CRN).
@@ -131,18 +135,11 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
                   i + 1, num_runs, s['total_entities'],
                   s['avg_satisfaction'], s['total_revenue_NIS'], elapsed))
 
+        if plot:
+            label = '{}_run{:02d}'.format(name, i + 1)
+            RunPlotter(stats, name=label).plot_all(show=False, save=True)
+
     return multi
-
-
-def determine_required_runs(pilot_results, kpi='avg_satisfaction'):
-    """
-    Use the pilot variance to compute n* via the standard formula:
-
-        n* = ceil( (t_{α/2, n0-1} * s / (δ * x_bar))^2 )
-
-    Returns at least the pilot-runs count.
-    """
-    return pilot_results.required_replications(kpi, pilot_runs=PILOT_RUNS)
 
 
 def print_comparison(baseline, alternative, alt_name):
@@ -189,8 +186,8 @@ def main(args):
         The model has 3 entity types (FriendsGroup, Couple, Single),
         6 service stations, and 3 concert stages.  The engine is
         event-driven: a min-heap of Event objects, each calling
-        event.handle(sim) when popped — same architecture as the
-        example HotelSimulation project from Tutorial 6.
+        event.handle(simulation) when popped — same architecture as
+        the example HotelSimulation project from Tutorial 6.
     """)
 
     # ── Step 1: Distribution fitting ─────────────────────────────────────────
@@ -220,54 +217,15 @@ def main(args):
     else:
         print("\n  Skipping Excel fitting — using built-in defaults.")
 
-    # ── Step 2: Pilot study ──────────────────────────────────────────────────
-    section("[2] Pilot study (baseline)")
-    paragraph("""
-        We first run a short pilot ({} replications) of the baseline.
-        Its only purpose is to estimate the sample variance s^2 of
-        avg_satisfaction so that we can compute how many additional
-        replications are needed for a relative precision of δ = {}
-        at confidence level 1 - α = {}.
-    """.format(PILOT_RUNS, RELATIVE_PRECISION, CONFIDENCE_LEVEL))
-
+    # ── Step 2: Full baseline run ────────────────────────────────────────────
+    total_runs = args.runs if args.runs else DEFAULT_RUNS
     baseline_alt = build_baseline()
-    pilot_results = run_scenario(
-        name='Baseline (pilot)',
-        cfg=baseline_alt.config,
-        num_runs=PILOT_RUNS,
-        friends_sampler=friends_sampler,
-        main_stage_sampler=main_stage_sampler,
-        verbose=args.verbose,
-    )
 
-    # ── Step 3: Determine required replications ──────────────────────────────
-    section("[3] Required number of replications")
+    section("[2] Full baseline ({} replications)".format(total_runs))
     paragraph("""
-        Formula (Banks et al., Discrete-Event System Simulation):
-
-            n* = ceil( ( t_{α/2, n0-1} * s / ( δ * x_bar ) )^2 )
-
-        with n0 = pilot size, s = pilot std, x_bar = pilot mean of
-        the chosen KPI (avg_satisfaction here).
-    """)
-
-    if args.runs:
-        required_runs = args.runs
-        print("\n  Using user-specified replication count: {}".format(
-            required_runs))
-    else:
-        required_runs = determine_required_runs(pilot_results)
-        print("\n  n* = {}  (α={}, δ={})".format(
-            required_runs, 1 - CONFIDENCE_LEVEL, RELATIVE_PRECISION))
-
-    total_runs = max(required_runs, PILOT_RUNS)
-
-    # ── Step 4: Full baseline run ────────────────────────────────────────────
-    section("[4] Full baseline ({} replications)".format(total_runs))
-    paragraph("""
-        Now run the baseline configuration `total_runs` times to get
-        precise estimates of every KPI plus their confidence intervals.
-    """)
+        Run the baseline configuration `{}` times to get precise estimates
+        of every KPI plus their {:.0f}% confidence intervals.
+    """.format(total_runs, CONFIDENCE_LEVEL * 100))
 
     baseline_stats = run_scenario(
         name='Baseline',
@@ -275,11 +233,12 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        plot=args.plot,
     )
     print(baseline_stats.report())
 
-    # ── Step 5: Alternative scenarios ────────────────────────────────────────
-    section("[5] Alternative scenarios")
+    # ── Step 3: Alternative scenarios ────────────────────────────────────────
+    section("[3] Alternative scenarios")
     paragraph("""
         We picked two budget-feasible combinations of the seven
         improvement options listed in the project brief (budget cap
@@ -304,6 +263,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        plot=args.plot,
     )
     print(combo_a_stats.report())
 
@@ -314,11 +274,12 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        plot=args.plot,
     )
     print(combo_b_stats.report())
 
-    # ── Step 6: Statistical comparison ───────────────────────────────────────
-    section("[6] Statistical comparison (Welch's two-sample t-test)")
+    # ── Step 4: Statistical comparison ───────────────────────────────────────
+    section("[4] Statistical comparison (Welch's two-sample t-test)")
     paragraph("""
         Welch's t-test is appropriate because the replications across
         scenarios are independent (no Common Random Numbers).  Test
@@ -335,7 +296,7 @@ def main(args):
     print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name)
     print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name)
 
-    # ── Step 7: Recommendations ──────────────────────────────────────────────
+    # ── Step 5: Recommendations ──────────────────────────────────────────────
     section("FINAL RECOMMENDATIONS")
     paragraph("""
         For each KPI we report which scenario delivered the best mean,
@@ -362,6 +323,19 @@ def main(args):
 
     print("=" * 70)
 
+    # ── Step 6: KPI comparison plots ────────────────────────────────────────
+    if args.plot:
+        section("[5] KPI comparison plots")
+        scenarios = {
+            'Baseline':       baseline_stats,
+            combo_a_alt.name: combo_a_stats,
+            combo_b_alt.name: combo_b_stats,
+        }
+        KPIComparisonPlotter(
+            scenarios,
+            kpi_higher_better=KPI_HIGHER_IS_BETTER,
+        ).plot_all_kpis(KPIS_TO_COMPARE, show=False, save=True)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CLI entry point
@@ -376,5 +350,7 @@ if __name__ == '__main__':
                         help='Print event log for the first run of each scenario.')
     parser.add_argument('--no-fit', action='store_true',
                         help='Skip Excel distribution fitting; use defaults.')
+    parser.add_argument('--plot', action='store_true',
+                        help='Save a per-run dashboard PNG to plots/ for every replication.')
     args = parser.parse_args()
     main(args)

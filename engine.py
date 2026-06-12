@@ -152,6 +152,12 @@ class Simulation:
                 print("  t={:7.2f}  {}".format(self.clock, event))
             event.handle(self)
 
+        # Snapshot time-averaged queue length per service station for KPIs.
+        queue_lengths = {}
+        for name, station in self.festival.stations.items():
+            queue_lengths[name] = station.queue.time_avg_length(self.clock)
+        self.stats.record_queue_lengths(queue_lengths)
+
         return self.stats
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -188,7 +194,7 @@ class Simulation:
             t = arr_start
             while t < arr_end:
                 ia = dist.sample_exponential(
-                    self.cfg.couple_arrival_rate_per_min) / mult
+                    self.cfg.couple_arrival_mean_min) / mult
                 t += ia
                 if t >= arr_end:
                     break
@@ -201,7 +207,7 @@ class Simulation:
             t = day_start
             while t < arr_end:
                 ia = dist.sample_exponential(
-                    self.cfg.single_arrival_rate_per_min) / mult
+                    self.cfg.single_arrival_mean_min) / mult
                 t += ia
                 if t >= arr_end:
                     break

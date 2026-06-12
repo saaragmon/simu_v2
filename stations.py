@@ -64,11 +64,22 @@ class EntryGate(ServiceStation):
         super().__init__('EntryGate', cfg.entry_clerks)
         self.cfg = cfg
 
-    def sample_service_time(self) -> float: #sample duration of entry process 
+    def sample_service_time(self) -> float: #sample duration of entry process
         """Total entry service time = scan + security."""
-        scan_time     = dist.sample_continuous_uniform(self.cfg.entry_scan_min, self.cfg.entry_scan_max) 
+        scan_time     = dist.sample_continuous_uniform(self.cfg.entry_scan_min, self.cfg.entry_scan_max)
         security_time = dist.sample_exponential(self.cfg.entry_security_mean)
         return scan_time + security_time
+
+    def process_entry(self, entity: 'Entity') -> None:
+        """Charge the entry ticket (and overnight fee for FriendsGroup
+        pre-committed to staying). The fee accumulates on entity.spending;
+        the festival's total_revenue picks it up at departure via
+        RunStatistics.record_entity, so we do NOT add to total_revenue
+        here — doing so would double-count this fee at the end of the run.
+        """
+        has_overnight = (entity.entity_type == 'FriendsGroup'
+                         and getattr(entity, 'stays_overnight', False))
+        entity.pay_entry(has_overnight)
 
 
 # Photo Station
@@ -274,6 +285,12 @@ class FoodStall(ServiceStation):
             return -self.cfg.food_unsatisfied_penalty
         return 0.0
 
+    def charge_meal(self, entity: 'Entity') -> float:
+        """Calculate the meal cost for this entity and add it to its spending."""
+        cost = self.calculate_meal_cost(entity)
+        entity.spending += cost
+        return cost
+
 
 # Concert Stage  (capacity-limited arena)
 
@@ -421,6 +438,14 @@ class MainStage(Stage):# Show duration ~ Normal(mu=45.90, sigma=8.97) minutes, f
         """Inject a fitted duration sampler from distribution_fitting module."""
         self._duration_sampler = sampler
 
+    def is_back_row(self, entity: 'Entity') -> bool:
+        """True if the entity is in the back rows that may leave the show early."""
+        return entity in self.get_back_row_entities()
+
+    def decides_to_leave_early(self) -> bool:
+        """Sample whether a back-row entity actually leaves early (prob 0.5)."""
+        return dist.sample_uniform_01() < self.early_leave_prob
+
 
 class SideStage(Stage): #Indie concerts (capacity 100, 5-min break, Uniform[20,30] duration).
 
@@ -503,6 +528,16 @@ class Festival:
 
     def get_station(self, name: str): # Return the station or stage object by name
         return self.stations.get(name) or self.stages.get(name)
+
+    def charge_overnight(self, entity: 'Entity') -> float:
+        """Charge the overnight fee for an entity that decided to stay over.
+        Only updates entity.spending — total_revenue picks this up at
+        departure via RunStatistics.record_entity. Adding it here too
+        would double-count the fee at the end of the run.
+        """
+        fee = self.cfg.overnight_price * entity.size
+        entity.spending += fee
+        return fee
 
     def shortest_queue_station(self, #Return the name of the service station with the shortest effective queue (queue length + busy servers)
                                exclude: Optional[List[str]] = None) -> str:  #Args: exclude: Station names to skip (e.g., stages, food stalls).
