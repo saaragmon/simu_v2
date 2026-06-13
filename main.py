@@ -1,27 +1,3 @@
-"""
-main.py
-=======
-Entry point for the Queuechella Festival Simulation.
-
-This script is the "front desk" of the simulation. It:
-    1. Loads the Excel sample data and fits distributions
-       (Exponential / Normal / Uniform via KS goodness-of-fit).
-    2. Runs the BASELINE configuration for the chosen number of
-       replications (default 20).
-    3. Runs each ALTERNATIVE combination with the same replication count
-       so the comparisons are fair.
-    4. Builds Student-t confidence intervals for every KPI.
-    5. Compares each alternative to the baseline with Welch's two-sample
-       t-test (independent samples; no Common Random Numbers).
-    6. Picks the best alternative per KPI, respecting which direction is
-       "better" (e.g. higher satisfaction good, lower visit duration good).
-
-Usage:
-    python main.py                          # default end-to-end run
-    python main.py --runs 30                # override replication count
-    python main.py --verbose                # print event log for first run
-    python main.py --no-fit                 # skip Excel fitting, use defaults
-"""
 
 from __future__ import annotations
 
@@ -44,9 +20,7 @@ from distribution_fitting import fit_from_excel
 from plotting import RunPlotter, KPIComparisonPlotter
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Constants
-# ─────────────────────────────────────────────────────────────────────────────
+# Constants ─────────────────────────────────────────────────────────────────────────────
 
 EXCEL_PATH = os.path.join(os.path.dirname(__file__),
                           'samples_for_simulation.xlsx')
@@ -76,9 +50,7 @@ KPI_HIGHER_IS_BETTER = {
 }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Text helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# Text helpers ─────────────────────────────────────────────────────────────────────────────
 
 def section(title):
     """Print a visible section header to make the output scannable."""
@@ -93,9 +65,7 @@ def paragraph(text):
         print("  " + line.strip())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Scenario runner
-# ─────────────────────────────────────────────────────────────────────────────
+# Scenario runner ─────────────────────────────────────────────────────────────────────────────
 
 def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
                  verbose=False, base_seed=1000, plot=False):
@@ -173,9 +143,7 @@ def print_comparison(baseline, alternative, alt_name):
             print("    {}: ERROR — {}".format(kpi, e))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Main routine
-# ─────────────────────────────────────────────────────────────────────────────
+# Main routine ─────────────────────────────────────────────────────────────────────────────
 
 def main(args):
 
@@ -360,9 +328,7 @@ def main(args):
         ).plot_all_kpis(KPIS_TO_COMPARE, show=False, save=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI entry point
-# ─────────────────────────────────────────────────────────────────────────────
+# CLI entry point ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
