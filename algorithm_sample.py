@@ -7,6 +7,17 @@ class AlgorithmSample:
     # INVERSE TRANSFORM ----------------------------------------------------------------------
 
     @staticmethod
+    def friends_group_size(a: int = 3, b: int = 6) -> int:
+        """
+        FriendsGroup size ~ Discrete Uniform{a, a+1, ..., b} via Inverse Transform.
+
+        CDF: F(k) = (k - a + 1) / (b - a + 1)  for k in {a,...,b}
+        Inverse: k = a + floor(U * (b - a + 1))
+        """
+        u = random.random()
+        return a + int(u * (b - a + 1))
+
+    @staticmethod
     def friends_interarrival_time(mean=15.0):
         """FriendsGroup inter-arrival time ~ Exponential(mean) in minutes."""
         u = random.random()
@@ -154,3 +165,20 @@ class AlgorithmSample:
         """Visitor battery level on arrival ~ Normal(40, 15), clamped to [0, 99.9]."""
         level = mu + sigma * AlgorithmSample._box_muller_standard()
         return max(0.0, min(99.9, level))
+
+    @staticmethod
+    def charging_station_duration(battery_level: float) -> float:
+        """
+        Charging duration ~ power-law distribution via Inverse Transform.
+
+        PDF:  f(t) = (alpha / 40^alpha) * (40 - t)^(alpha-1),  0 <= t <= 40
+        CDF:  F(t) = 1 - ((40 - t) / 40)^alpha
+        Inverse CDF: t = 40 * (1 - (1 - U)^(1/alpha))
+
+        where alpha = 100 / (100 - b),  b = battery percentage in [0, 99.9].
+        Higher battery → larger alpha → entity charges for less time.
+        """
+        b = max(0.0, min(99.9, battery_level))
+        alpha = 100.0 / (100.0 - b)
+        u = random.random()
+        return 40.0 * (1.0 - (1.0 - u) ** (1.0 / alpha))

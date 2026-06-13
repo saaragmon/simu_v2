@@ -3,6 +3,7 @@ import random
 from typing import List, Optional
 from config import SimConfig
 import distributions as dist
+from algorithm_sample import AlgorithmSample
 
 _entity_counter = 0  # Global monotonic ID generator
 
@@ -89,8 +90,8 @@ class FriendsGroup(Entity):
     _ALL_SHOWS    = ['MainStage', 'SideStage', 'DJStage']
 
     def __init__(self, arrival_time: float, cfg: SimConfig):
-        size = dist.sample_discrete_uniform(cfg.friends_size_min,
-                                            cfg.friends_size_max)
+        size = AlgorithmSample.friends_group_size(cfg.friends_size_min,
+                                                  cfg.friends_size_max)
         super().__init__('FriendsGroup', size, arrival_time, 1, cfg)
 
         self.stays_overnight: bool = (dist.sample_uniform_01() <

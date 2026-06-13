@@ -124,9 +124,9 @@ class ChargingStation(ServiceStation):
         self.cfg = cfg
 
     def sample_service_time(self) -> float:
-        battery = dist.sample_battery_level(self.cfg.charging_battery_mean,
-                                            self.cfg.charging_battery_std)
-        return dist.sample_charging_duration(battery)
+        battery = AlgorithmSample.battery_level(self.cfg.charging_battery_mean,
+                                                self.cfg.charging_battery_std)
+        return AlgorithmSample.charging_station_duration(battery)
 
 
 # Merch Tent
