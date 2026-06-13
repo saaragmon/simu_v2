@@ -17,7 +17,8 @@ from alternatives import (
     ALL_ALTERNATIVES,
 )
 from distribution_fitting import fit_from_excel
-from plotting import RunPlotter, KPIComparisonPlotter
+from plotting import RunPlotter, KPIComparisonPlotter, plot_heating_time_data
+from warmup import run_warmup_analysis
 
 
 # Constants ─────────────────────────────────────────────────────────────────────────────
@@ -185,9 +186,46 @@ def main(args):
     else:
         print("\n  Skipping Excel fitting — using built-in defaults.")
 
+    baseline_alt = build_baseline()
+
+    # ── Step 1.5: Warm-up (heating-time) analysis ────────────────────────────
+    if args.warmup:
+        section("[1.5] Warm-up period analysis")
+        paragraph("""
+            We run 30 independent replications and plot two KPIs
+            (Average Queue Length and Average Satisfaction) over
+            replication number.  Welch's moving-average smoother is
+            overlaid to make the stabilisation point visible.
+
+            For this finite-horizon festival simulation every replication
+            starts from identical empty-system conditions, so we expect
+            rapid stabilisation.  The warm-up cutoff is set to 5
+            replications based on visual inspection of the plots.
+
+            Run time = warm-up (5) x 7 + warm-up (5) = 40 replications
+            are needed to collect sufficient steady-state data.
+        """)
+        warmup_series = run_warmup_analysis(
+            baseline_alt.config,
+            n_runs=30,
+            friends_sampler=friends_sampler,
+            main_stage_sampler=main_stage_sampler,
+        )
+        plot_heating_time_data(
+            warmup_series['avg_queue_length'],
+            'Average Queue Length',
+            warmup_cutoff=5,
+            show=True, save=True,
+        )
+        plot_heating_time_data(
+            warmup_series['avg_satisfaction'],
+            'Average Satisfaction',
+            warmup_cutoff=5,
+            show=True, save=True,
+        )
+
     # ── Step 2: Full baseline run ────────────────────────────────────────────
     total_runs = args.runs if args.runs else DEFAULT_RUNS
-    baseline_alt = build_baseline()
 
     section("[2] Full baseline ({} replications)".format(total_runs))
     paragraph("""
@@ -340,5 +378,7 @@ if __name__ == '__main__':
                         help='Skip Excel distribution fitting; use defaults.')
     parser.add_argument('--plot', action='store_true',
                         help='Save a per-run dashboard PNG to plots/ for every replication.')
+    parser.add_argument('--warmup', action='store_true',
+                        help='Run warm-up (heating-time) analysis before the main runs.')
     args = parser.parse_args()
     main(args)

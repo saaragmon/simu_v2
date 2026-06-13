@@ -32,6 +32,7 @@ from typing import Dict, List, Optional
 import matplotlib.pyplot as plt
 
 from config import FESTIVAL_START, DAY_DURATION
+from sim_stats import MultiRunStatistics
 
 
 # ─── Visual style (matches the hotel example + plot_distributions.py) ────────
@@ -398,3 +399,57 @@ def plot_run(stats, name='Run', show=True, save=True, output_dir='plots'):
     """Build a RunPlotter and emit the dashboard. One-liner for main.py."""
     plotter = RunPlotter(stats, name=name, output_dir=output_dir)
     plotter.plot_all(show=show, save=save)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Warm-up (heating-time) plot
+# ─────────────────────────────────────────────────────────────────────────────
+
+def plot_heating_time_data(
+    data: List[float],
+    label: str,
+    warmup_cutoff: Optional[int] = None,
+    show: bool = True,
+    save: bool = True,
+    output_dir: str = 'plots',
+) -> None:
+    """
+    Plot a per-replication KPI series with Welch's moving-average
+    smoother overlaid — the standard heating-time (warm-up) plot.
+
+    Args:
+        data:           list of per-replication KPI values.
+        label:          y-axis label and figure title.
+        warmup_cutoff:  if given, draws a vertical dashed line at this
+                        replication number to mark the chosen warm-up end.
+        show / save:    display or write PNG to output_dir.
+    """
+    smoothed = MultiRunStatistics.welch_moving_average(data)
+    reps = list(range(1, len(data) + 1))
+
+    fig, ax = plt.subplots(figsize=(11, 5))
+    ax.plot(reps, data, color=UNIFIED_BLUE, linewidth=1.2,
+            alpha=0.7, label='Per-replication value')
+    ax.plot(reps, smoothed, color='red', linewidth=2.0,
+            label="Welch's moving average")
+    if warmup_cutoff is not None:
+        ax.axvline(warmup_cutoff, color='orange', linestyle='--',
+                   linewidth=1.8,
+                   label='Warm-up cutoff (rep {})'.format(warmup_cutoff))
+    ax.set_xlabel('Replication number', color=TEXT_COLOR)
+    ax.set_ylabel(label, color=TEXT_COLOR)
+    ax.set_title('Heating Time — ' + label, color=TEXT_COLOR)
+    ax.grid(True, alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+
+    if save:
+        os.makedirs(output_dir, exist_ok=True)
+        safe = label.replace(' ', '_').replace('/', '_')
+        path = os.path.join(output_dir, 'warmup_{}.png'.format(safe))
+        fig.savefig(path, dpi=120, bbox_inches='tight')
+        print('  Saved warm-up plot to: {}'.format(path))
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
