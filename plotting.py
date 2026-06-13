@@ -188,27 +188,6 @@ class RunPlotter:
         ax.legend()
         return ax
 
-    def plot_visit_duration_histogram(self, ax=None):
-        """Histogram of visit durations (depart - arrival), in minutes."""
-        records = self.stats.entity_records
-        if not records:
-            return None
-
-        durations = [r.depart_time - r.arrival_time for r in records]
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 5))
-        ax.hist(durations, bins=30, color=UNIFIED_BLUE, edgecolor='black')
-        mean = sum(durations) / len(durations)
-        ax.axvline(mean, color='red', linestyle='--',
-                   label='Mean = {:.1f} min'.format(mean))
-        ax.set_xlabel('Visit duration (minutes)', color=TEXT_COLOR)
-        ax.set_ylabel('Number of entities', color=TEXT_COLOR)
-        ax.set_title('Visit Duration Distribution — ' + self.name,
-                     color=TEXT_COLOR)
-        ax.grid(True, alpha=0.3)
-        ax.legend()
-        return ax
-
     # ─────────────────────────────────────────────────────────────────────────
     # Per-station bar charts
     # ─────────────────────────────────────────────────────────────────────────
@@ -272,10 +251,10 @@ class RunPlotter:
         self.plot_cumulative_revenue(ax=axes[0, 1])
         self.plot_arrivals_per_hour(ax=axes[1, 0])
         self.plot_satisfaction_histogram(ax=axes[1, 1])
-        self.plot_visit_duration_histogram(ax=axes[2, 0])
-        self.plot_queue_waits(ax=axes[2, 1])
-        self.plot_abandonment_rates(ax=axes[3, 0])
-        axes[3, 1].axis('off')   # spare slot for now
+        self.plot_queue_waits(ax=axes[2, 0])
+        self.plot_abandonment_rates(ax=axes[2, 1])
+        axes[3, 0].axis('off')
+        axes[3, 1].axis('off')
 
         fig.suptitle('Simulation Dashboard — ' + self.name,
                      fontsize=16, color=TEXT_COLOR, y=0.995)

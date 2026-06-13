@@ -35,15 +35,14 @@ CONFIDENCE_LEVEL = 0.9
 RELATIVE_PRECISION = 0.10
 
 # KPIs we will optimise / compare across scenarios.
-KPIS_TO_COMPARE = ['avg_satisfaction', 'avg_visit_duration',
-                   'total_revenue', 'total_entities', 'avg_queue_length']
+KPIS_TO_COMPARE = ['avg_satisfaction', 'total_revenue',
+                   'total_entities', 'avg_queue_length']
 
 # For each KPI, is "higher" the better outcome?
 # Used both in the recommendation (max vs min) and in the comparison
 # arrows (better vs worse).
 KPI_HIGHER_IS_BETTER = {
     'avg_satisfaction':   True,
-    'avg_visit_duration': False,   # less time stuck in queues = better
     'total_revenue':      True,
     'total_entities':     True,
     'avg_queue_length':   False,   # shorter queues = better

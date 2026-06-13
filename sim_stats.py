@@ -5,7 +5,6 @@ Metrics collection, aggregation, and statistical analysis for the simulation.
 
 Collected per-run metrics:
     - Average satisfaction score of all departed entities      (KPI)
-    - Average visit duration (depart_time - arrival_time)      (KPI)
     - Total revenue (ticket + overnight + merch + photo + food) (KPI)
     - Total number of departed entities                        (KPI)
     - Average queue wait per station
@@ -135,21 +134,6 @@ class RunStatistics:
         return 0.0
 
     @property
-    def avg_visit_duration(self):
-        """Mean time (minutes) an entity spent inside the festival.
-
-        visit_duration = depart_time - arrival_time
-
-        Lower is better — long visits usually mean entities got stuck in
-        queues or had to wait for shows.
-        """
-        times = [r.depart_time - r.arrival_time
-                 for r in self.entity_records]
-        if len(times) > 0:
-            return _stats.mean(times)
-        return 0.0
-
-    @property
     def avg_queue_wait(self):
         """Average wait time (min) per service station."""
         return {
@@ -213,7 +197,6 @@ class RunStatistics:
         """Return a flat dictionary of KPIs (convenient for printing)."""
         return {
             'avg_satisfaction':    round(self.avg_satisfaction, 4),
-            'avg_visit_duration':  round(self.avg_visit_duration, 4),
             'total_entities':      self.total_entities,
             'total_revenue_NIS':   round(self.total_revenue, 2),
             'num_overnight':       self.num_overnight,
@@ -269,7 +252,6 @@ class MultiRunStatistics:
         """Return the list of per-run KPI values."""
         mapping = {
             'avg_satisfaction':   lambda r: r.avg_satisfaction,
-            'avg_visit_duration': lambda r: r.avg_visit_duration,
             'total_revenue':      lambda r: r.total_revenue,
             'total_entities':     lambda r: float(r.total_entities),
             'avg_queue_length':   lambda r: r.avg_queue_length,
@@ -448,9 +430,8 @@ class MultiRunStatistics:
                 self.confidence_level * 100, self.relative_precision * 100),
             "=" * 60,
         ]
-        for kpi in ['avg_satisfaction', 'avg_visit_duration',
-                    'total_revenue', 'total_entities',
-                    'avg_queue_length']:
+        for kpi in ['avg_satisfaction', 'total_revenue',
+                    'total_entities', 'avg_queue_length']:
             try:
                 mean, lo, hi = self.confidence_interval(kpi)
                 lines.append(

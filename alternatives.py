@@ -70,8 +70,8 @@ def build_combo_a() -> Alternative:
     Cost: 150,000 + 200,000 + 600,000 = 950,000 NIS
 
     OVERALL WINNER from the exhaustive scan: lowest rank-sum across all
-    5 KPIs (avg_satisfaction, avg_visit_duration, total_revenue_NIS,
-    total_entities, avg_queue_length).
+    4 KPIs (avg_satisfaction, total_revenue_NIS, total_entities,
+    avg_queue_length).
 
     Mechanism:
       • Auto-scan (#6) removes the entry-gate bottleneck.

@@ -79,9 +79,9 @@ Concert stages (capacity-limited arena + queue):
 ## KPIs
 
 - `avg_satisfaction` — mean satisfaction score [0-10]. Higher is better.
-- `avg_visit_duration` — mean minutes from arrival to departure. Lower is better.
 - `total_revenue` — total NIS collected. Higher is better.
 - `total_entities` — count of entities that departed.
+- `avg_queue_length` — time-weighted mean queue length across stations. Lower is better.
 
 Multi-run analysis uses Student-t confidence intervals (CL=90%, relative
 precision 10%) and paired t-tests. See `sim_stats.MultiRunStatistics`.
