@@ -1,19 +1,3 @@
-"""
-warmup.py
-=========
-Warm-up (heating-time) period analysis for the Queuechella simulation.
-
-Usage — identical pattern to the example hotel-simulation project:
-
-    from warmup import WarmupSimulation
-
-    sim = WarmupSimulation(30)
-    sim.run()
-
-    sim.plot_heating_time_data(sim.daily_avg_queue_lengths, 'Average Queue Length')
-    sim.plot_heating_time_data(sim.daily_avg_satisfactions, 'Average Satisfaction')
-"""
-
 from __future__ import annotations
 
 from typing import Callable, List, Optional
