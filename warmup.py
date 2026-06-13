@@ -13,17 +13,8 @@ import os
 
 _EXCEL_PATH = os.path.join(os.path.dirname(__file__), 'samples_for_simulation.xlsx')
 
-
 class WarmupSimulation:
-    """
-    Mirrors the interface of the example hotel-simulation project:
-
-        sim = WarmupSimulation(30)
-        sim.run()
-        sim.plot_heating_time_data(sim.daily_avg_queue_lengths, 'Average Queue Length')
-        sim.plot_heating_time_data(sim.daily_avg_satisfactions, 'Average Satisfaction')
-    """
-
+    
     def __init__(self, n_runs: int = 30):
         self.n_runs = n_runs
 
@@ -52,10 +43,6 @@ class WarmupSimulation:
         print("[Warm-Up Analysis] Done.\n")
 
     def plot_heating_time_data(self, data: List[float], label: str) -> None:
-        """
-        Plot a per-replication KPI series with Welch's moving-average
-        smoother overlaid — the standard heating-time plot.
-        """
         smoothed = MultiRunStatistics.welch_moving_average(data)
         days = list(range(1, len(data) + 1))
 
