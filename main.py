@@ -100,9 +100,10 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
         elapsed = time.time() - t0
         s = stats.summary()
         print("    Run {:3d}/{}  avg_sat={:.3f}  "
-              "revenue={:,.0f} NIS  ({:.2f}s)".format(
+              "revenue={:,.0f} NIS  qlen={:.2f}  ({:.2f}s)".format(
                   i + 1, num_runs,
-                  s['avg_satisfaction'], s['total_revenue_NIS'], elapsed))
+                  s['avg_satisfaction'], s['total_revenue_NIS'],
+                  s['avg_queue_length'], elapsed))
 
         if plot:
             label = '{}_run{:02d}'.format(name, i + 1)
