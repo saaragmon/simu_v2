@@ -74,31 +74,31 @@ class AlgorithmSample:
     # COMPOSITION----------------------------------------------------------------------    
 
     @staticmethod
-    def photo_station_duration():
-        """Sample PhotoStation session duration using the Composition method."""
-        W1, W2 = 1/4, 5/8      # piece weights, W3 = 1/8 (the rest)
+    def photo_station_duration(): #using recycled u for less random calls
+        u = random.random()
 
-        u_pick = random.random()   # choose which piece
-        u_val  = random.random()   # sample within that piece
+        if u < 0.25:
+            # Piece 1: 1 <= x < 2
+            # Recycle u from [0, 0.25) to [0, 1)
+            u_recycled = u / 0.25
+            return math.sqrt(1.0 + 3.0 * u_recycled)
 
-        if u_pick < W1:
-            # Piece 1: x = sqrt(1 + 3U)
-            return math.sqrt(1.0 + 3.0 * u_val)
-
-        elif u_pick < W1 + W2:
-            # Piece 2: solve 4x² + 5x - 40C = 0
-            C = (5.0 / 8.0) * u_val + 0.65
-            disc = 25.0 + 4.0 * 4.0 * 40.0 * C
-            return (-5.0 + math.sqrt(disc)) / (2.0 * 4.0)
+        elif u < 0.875:  # 0.25 + 0.625
+            # Piece 2: 2 <= x < 3
+            # Recycle u from [0.25, 0.875) to [0, 1)
+            u_recycled = (u - 0.25) / 0.625
+            discriminant = 441.0 + 400.0 * u_recycled
+            return (-5.0 + math.sqrt(discriminant)) / 8.0
 
         else:
-            # Piece 3: x = 3 + U  (uniform on [3, 4])
-            return 3.0 + u_val
-
+            # Piece 3: 3 <= x < 4
+            # Recycle u from [0.875, 1.0) to [0, 1)
+            u_recycled = (u - 0.875) / 0.125
+            return 3.0 + u_recycled
     # ACCEPT-REJECT ----------------------------------------------------------------------
 
     @staticmethod
-    def _dj_pdf(x):
+    def _dj_pdf(x): 
         if 20.0 <= x <= 40.0:
             return (x - 20.0) / 600.0
         elif 40.0 < x <= 50.0:
