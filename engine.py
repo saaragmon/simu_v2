@@ -96,8 +96,8 @@ class Simulation:
     # ─────────────────────────────────────────────────────────────────────────
 
     def _default_friends_arrival(self):
-        """FriendsGroup inter-arrival time (minutes). Exponential(lambda=0.729270699)."""
-        return dist.sample_exponential(1.0 / 0.729270699)
+        """FriendsGroup inter-arrival time (minutes). Exponential(mean=1.371232933)."""
+        return dist.sample_exponential(1.371232933)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Main run loop
