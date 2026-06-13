@@ -18,7 +18,7 @@ from alternatives import (
 )
 from distribution_fitting import fit_from_excel
 from plotting import RunPlotter, KPIComparisonPlotter, plot_heating_time_data
-from warmup import run_warmup_analysis
+from warmup import WarmupSimulation
 
 
 # Constants ─────────────────────────────────────────────────────────────────────────────
@@ -205,24 +205,10 @@ def main(args):
             Run time = warm-up (5) x 7 + warm-up (5) = 40 replications
             are needed to collect sufficient steady-state data.
         """)
-        warmup_series = run_warmup_analysis(
-            baseline_alt.config,
-            n_runs=30,
-            friends_sampler=friends_sampler,
-            main_stage_sampler=main_stage_sampler,
-        )
-        plot_heating_time_data(
-            warmup_series['avg_queue_length'],
-            'Average Queue Length',
-            warmup_cutoff=5,
-            show=True, save=True,
-        )
-        plot_heating_time_data(
-            warmup_series['avg_satisfaction'],
-            'Average Satisfaction',
-            warmup_cutoff=5,
-            show=True, save=True,
-        )
+        sim = WarmupSimulation(30)
+        sim.run()
+        sim.plot_heating_time_data(sim.daily_avg_queue_lengths, 'Average Queue Length')
+        sim.plot_heating_time_data(sim.daily_avg_satisfactions, 'Average Satisfaction')
 
     # ── Step 2: Full baseline run ────────────────────────────────────────────
     total_runs = args.runs if args.runs else DEFAULT_RUNS
