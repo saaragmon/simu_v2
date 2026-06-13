@@ -253,7 +253,6 @@ class MultiRunStatistics:
         mapping = {
             'avg_satisfaction':   lambda r: r.avg_satisfaction,
             'total_revenue':      lambda r: r.total_revenue,
-            'total_entities':     lambda r: float(r.total_entities),
             'avg_queue_length':   lambda r: r.avg_queue_length,
         }
         if kpi not in mapping:
@@ -431,7 +430,7 @@ class MultiRunStatistics:
             "=" * 60,
         ]
         for kpi in ['avg_satisfaction', 'total_revenue',
-                    'total_entities', 'avg_queue_length']:
+                    'avg_queue_length']:
             try:
                 mean, lo, hi = self.confidence_interval(kpi)
                 lines.append(

@@ -36,8 +36,7 @@ CONFIDENCE_LEVEL = 0.9
 RELATIVE_PRECISION = 0.10
 
 # KPIs we will optimise / compare across scenarios.
-KPIS_TO_COMPARE = ['avg_satisfaction', 'total_revenue',
-                   'total_entities', 'avg_queue_length']
+KPIS_TO_COMPARE = ['avg_satisfaction', 'total_revenue', 'avg_queue_length']
 
 # For each KPI, is "higher" the better outcome?
 # Used both in the recommendation (max vs min) and in the comparison
@@ -45,7 +44,6 @@ KPIS_TO_COMPARE = ['avg_satisfaction', 'total_revenue',
 KPI_HIGHER_IS_BETTER = {
     'avg_satisfaction':   True,
     'total_revenue':      True,
-    'total_entities':     True,
     'avg_queue_length':   False,   # shorter queues = better
 }
 
@@ -101,9 +99,9 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
         multi.add_run(stats)
         elapsed = time.time() - t0
         s = stats.summary()
-        print("    Run {:3d}/{}  entities={:4d}  avg_sat={:.3f}  "
+        print("    Run {:3d}/{}  avg_sat={:.3f}  "
               "revenue={:,.0f} NIS  ({:.2f}s)".format(
-                  i + 1, num_runs, s['total_entities'],
+                  i + 1, num_runs,
                   s['avg_satisfaction'], s['total_revenue_NIS'], elapsed))
 
         if plot:

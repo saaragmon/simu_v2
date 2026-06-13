@@ -38,12 +38,10 @@ BUDGET = 1_000_000
 REPS = 5
 BASE_SEED = 1000
 
-KPIS = ['avg_satisfaction', 'total_revenue_NIS',
-        'total_entities', 'avg_queue_length']
+KPIS = ['avg_satisfaction', 'total_revenue_NIS', 'avg_queue_length']
 HIGHER_IS_BETTER = {
     'avg_satisfaction':   True,
     'total_revenue_NIS':  True,
-    'total_entities':     True,
     'avg_queue_length':   False,
 }
 
@@ -98,7 +96,6 @@ def main():
     base_means = run_combo(None)
     print(f"sat={base_means['avg_satisfaction']:.3f}  "
           f"rev={base_means['total_revenue_NIS']:,.0f}  "
-          f"ent={base_means['total_entities']:.0f}  "
           f"qlen={base_means['avg_queue_length']:.1f}")
 
     # All feasible combos
@@ -110,7 +107,6 @@ def main():
         print(f"  {combo_label(combo):14s} cost={cost:>7,}  "
               f"sat={means['avg_satisfaction']:.3f}  "
               f"rev={means['total_revenue_NIS']:,.0f}  "
-              f"ent={means['total_entities']:.0f}  "
               f"qlen={means['avg_queue_length']:.1f}")
 
     print(f'\nDone in {time.time()-t0:.1f}s.')
@@ -136,7 +132,7 @@ def main():
 
     # ─── Overall winner: rank-sum across all 5 KPIs ──────────────────────────
     print('\n' + '=' * 70)
-    print('  OVERALL WINNER (rank-sum across all 4 KPIs, lower = better)')
+    print('  OVERALL WINNER (rank-sum across all 3 KPIs, lower = better)')
     print('=' * 70)
     rank_sums = {label: 0 for (label, _d, _c, _m) in results}
     for kpi in KPIS:
