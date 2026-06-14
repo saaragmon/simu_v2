@@ -16,7 +16,7 @@ from alternatives import (
     build_baseline, build_combo_a, build_combo_b, build_combo_c,
     ALL_ALTERNATIVES,
 )
-from distribution_fitting import fit_from_excel
+from distributions import fit_from_excel
 from plotting import RunPlotter, KPIComparisonPlotter, plot_heating_time_data
 from warmup import WarmupSimulation
 

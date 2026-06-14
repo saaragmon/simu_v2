@@ -10,7 +10,7 @@ Graphical goodness-of-fit comparison for the two sample-data columns in
 For each column we:
     1. Fit Exponential, Normal, and Uniform via MLE.
     2. Pick the best fit by smallest Kolmogorov-Smirnov statistic
-       (same logic the simulation uses in `distribution_fitting.py`).
+       (same logic the simulation uses in `distributions.py`).
     3. Draw three diagnostic plots for the chosen distribution:
          a) Histogram + KDE density line
          b) QQ plot against the fitted distribution
@@ -37,8 +37,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import probplot, expon, norm, uniform
 
-from distributions import load_sample_data
-from distribution_fitting import best_fit
+from distributions import load_sample_data, best_fit
 
 
 # ─── Visual style (matches the hotel example) ────────────────────────────────

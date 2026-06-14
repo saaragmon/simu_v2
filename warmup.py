@@ -5,7 +5,7 @@ from typing import Callable, List, Optional
 import matplotlib.pyplot as plt
 
 from alternatives import build_baseline
-from distribution_fitting import fit_from_excel
+from distributions import fit_from_excel
 from engine import Simulation as _Simulation
 from sim_stats import MultiRunStatistics
 
