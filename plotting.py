@@ -3,7 +3,6 @@ plotting.py
 ===========
 Visualizations for a single Queuechella simulation run.
 
-Mirrors the spirit of the hotel-simulation example project:
     - "Plots for Heating Time" — time-series of system load and revenue
       over the festival hours.
     - "Data Points For Current State" — distributions of final

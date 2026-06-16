@@ -17,10 +17,6 @@ For each column we:
          c) Empirical CDF vs. fitted CDF
     4. Save the figure to `plots/<column>.png` and also show it.
 
-This mirrors the graphical comparison from the hotel-simulation example
-project distributed with the course, adapted for our 3-candidate
-fitting workflow.
-
 Usage:
     python3 plot_distributions.py                  # all columns
     python3 plot_distributions.py --no-show        # save only, no popup
