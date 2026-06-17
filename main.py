@@ -79,10 +79,11 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
 
     If `plot=True`, every run also saves a dashboard PNG to `plots/`.
 
-    All scenarios share the same base_seed default, so run i of every
-    scenario sees the same random stream → Common Random Numbers (CRN).
-    That makes Welch's t-test slightly conservative but enables the paired
-    t-test as a stronger alternative.
+    Each scenario is called with a DIFFERENT base_seed so the random
+    streams across scenarios are disjoint (no Common Random Numbers).
+    Replications within a scenario are still reproducible (seed = base_seed + i)
+    but independent of replications in other scenarios — the precondition
+    for Welch's two-sample t-test.
     """
     multi = MultiRunStatistics(CONFIDENCE_LEVEL, RELATIVE_PRECISION)
     print("\n  Running '{}' — {} replications ...".format(name, num_runs))
@@ -117,27 +118,34 @@ def print_comparison(baseline, alternative, alt_name):
     Compare one alternative scenario against the baseline using Welch's
     two-sample t-test (appropriate for independent samples).
 
-    Reports per KPI:
-        - t-statistic
-        - critical value t_{α/2, df}
-        - whether the difference is statistically significant
-        - whether the alternative is BETTER (↑) or WORSE (↓) than the
-          baseline, accounting for the KPI's direction.
+    Reports per KPI, hotel-project style:
+        - mean difference (baseline - alternative)
+        - confidence interval on the difference
+        - verdict by checking whether 0 is inside the interval
     """
+    conf_pct = int(round(CONFIDENCE_LEVEL * 100))
     print("\n  --- {} vs Baseline (Welch's t-test) ---".format(alt_name))
     for kpi in KPIS_TO_COMPARE:
         try:
-            # diffs are computed as (baseline - alt), so:
-            # t_stat < 0  =>  alt is HIGHER than baseline
-            t_stat, t_crit, reject = baseline.welch_t_test(alternative, kpi)
-            alt_is_higher = t_stat < 0
+            r = baseline.welch_t_test(alternative, kpi)
+            diff = r['diff']         # baseline − alternative
+            lo, hi = r['ci_lower'], r['ci_upper']
             higher_is_better = KPI_HIGHER_IS_BETTER.get(kpi, True)
-            alt_is_better = (alt_is_higher == higher_is_better)
-            direction = "↑ better" if alt_is_better else "↓ worse"
-            verdict = "SIGNIFICANT" if reject else "not significant"
-            print("    {:25s}: t={:+7.3f}  t_crit={:.3f}  -> {} {}".format(
-                kpi, t_stat, t_crit, verdict,
-                direction if reject else ""))
+
+            print("    {}".format(kpi))
+            print("      Mean difference (baseline - {}): {:+.4f}".format(
+                alt_name, diff))
+            print("      {}% Confidence Interval: [{:+.4f}, {:+.4f}]".format(
+                conf_pct, lo, hi))
+
+            if lo > 0:
+                winner = 'Baseline' if higher_is_better else alt_name
+                print("      0 outside CI → {} significantly better".format(winner))
+            elif hi < 0:
+                winner = alt_name if higher_is_better else 'Baseline'
+                print("      0 outside CI → {} significantly better".format(winner))
+            else:
+                print("      0 inside CI → cannot determine which is better")
         except Exception as e:
             print("    {}: ERROR — {}".format(kpi, e))
 
@@ -224,6 +232,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=1000,
         plot=args.plot,
     )
     print(baseline_stats.report())
@@ -261,6 +270,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=11000,
         plot=args.plot,
     )
     print(combo_a_stats.report())
@@ -272,6 +282,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=21000,
         plot=args.plot,
     )
     print(combo_b_stats.report())
@@ -283,6 +294,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=31000,
         plot=args.plot,
     )
     print(combo_c_stats.report())

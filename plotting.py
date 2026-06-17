@@ -6,8 +6,7 @@ Visualizations for a single Queuechella simulation run.
     - "Plots for Heating Time" — time-series of system load and revenue
       over the festival hours.
     - "Data Points For Current State" — distributions of final
-      satisfaction, visit duration, per-station queue waits and
-      abandonment rates.
+      satisfaction, visit duration, and per-station queue waits.
 
 Usage:
     from engine import Simulation
@@ -213,32 +212,6 @@ class RunPlotter:
         ax.grid(True, axis='x', alpha=0.3)
         return ax
 
-    def plot_abandonment_rates(self, ax=None):
-        """Abandonment rate per station (lower is better)."""
-        records = self.stats.entity_records
-        if not records:
-            return None
-        total = len(records)
-        rates = {s: cnt / total
-                 for s, cnt in self.stats.abandonments.items()}
-        if not rates:
-            return None
-
-        stations = list(rates.keys())
-        values   = [rates[s] for s in stations]
-
-        if ax is None:
-            fig, ax = plt.subplots(figsize=(10, 5))
-        ax.barh(stations, values, color=UNIFIED_PINK, edgecolor='black')
-        for i, v in enumerate(values):
-            ax.text(v, i, ' {:.1%}'.format(v), va='center',
-                    color=TEXT_COLOR)
-        ax.set_xlabel('Abandonment rate', color=TEXT_COLOR)
-        ax.set_title('Abandonment Rate by Station — ' + self.name,
-                     color=TEXT_COLOR)
-        ax.grid(True, axis='x', alpha=0.3)
-        return ax
-
     # ─────────────────────────────────────────────────────────────────────────
     # Convenience: all plots at once
     # ─────────────────────────────────────────────────────────────────────────
@@ -252,7 +225,7 @@ class RunPlotter:
         self.plot_arrivals_per_hour(ax=axes[1, 0])
         self.plot_satisfaction_histogram(ax=axes[1, 1])
         self.plot_queue_waits(ax=axes[2, 0])
-        self.plot_abandonment_rates(ax=axes[2, 1])
+        axes[2, 1].axis('off')
         axes[3, 0].axis('off')
         axes[3, 1].axis('off')
 

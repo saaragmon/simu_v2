@@ -644,9 +644,6 @@ class StationAbandonEvent(Event):
         if not station.queue.remove(entity, simulation.clock):
             return  # Entity was already removed somehow
 
-        # Record that the entity abandoned this station.
-        simulation.stats.record_abandonment(self.station_name)
-
         # Reduce satisfaction because the entity waited and left.
         entity.update_satisfaction(-simulation._get_abandon_penalty(entity))
 
@@ -867,7 +864,6 @@ class DayEndEvent(Event):
                         # Charge overnight cost and move the couple to day 2.
                         simulation.festival.charge_overnight(entity)
                         entity.day = 2
-                        simulation.stats.num_overnight += 1
                     else:
                         # If the couple does not stay, it leaves.
                         simulation._depart(entity)
@@ -877,7 +873,6 @@ class DayEndEvent(Event):
                     if entity.stays_overnight:
                         # Move the group to day 2.
                         entity.day = 2
-                        simulation.stats.num_overnight += 1
                     else:
                         # If the group does not stay, it leaves.
                         simulation._depart(entity)
