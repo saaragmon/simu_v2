@@ -113,7 +113,7 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
     return multi
 
 
-def print_comparison(baseline, alternative, alt_name):
+def print_comparison(baseline, alternative, alt_name, alpha_per_test=None):
     """
     Compare one alternative scenario against the baseline using Welch's
     two-sample t-test (appropriate for independent samples).
@@ -122,12 +122,18 @@ def print_comparison(baseline, alternative, alt_name):
         - mean difference (baseline - alternative)
         - confidence interval on the difference
         - verdict by checking whether 0 is inside the interval
+
+    Pass `alpha_per_test` to apply a Bonferroni-corrected level
+    (e.g. alpha_total / K) so the family-wise confidence is preserved.
     """
-    conf_pct = int(round(CONFIDENCE_LEVEL * 100))
+    if alpha_per_test is None:
+        conf_pct = int(round(CONFIDENCE_LEVEL * 100))
+    else:
+        conf_pct = round((1 - alpha_per_test) * 100, 2)
     print("\n  --- {} vs Baseline (Welch's t-test) ---".format(alt_name))
     for kpi in KPIS_TO_COMPARE:
         try:
-            r = baseline.welch_t_test(alternative, kpi)
+            r = baseline.welch_t_test(alternative, kpi, alpha=alpha_per_test)
             diff = r['diff']         # baseline − alternative
             lo, hi = r['ci_lower'], r['ci_upper']
             higher_is_better = KPI_HIGHER_IS_BETTER.get(kpi, True)
@@ -312,11 +318,29 @@ def main(args):
         with degrees of freedom given by the Welch-Satterthwaite
         equation.  We reject H0 (means equal) at confidence 1 - α
         when |t| > t_{α/2, df}.
+
+        First pass: per-test α = 1 - CL (each comparison stands alone).
+        Second pass: Bonferroni-corrected per-test α = α_total / K so
+        the family-wise confidence across all comparisons stays at 1 - α_total.
     """)
 
+    print("\n  ===== Per-test α (no Bonferroni) =====")
     print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name)
     print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name)
     print_comparison(baseline_stats, combo_c_stats, combo_c_alt.name)
+
+    # Bonferroni: K = (# alternatives compared to baseline) × (# KPIs)
+    n_alternatives = 3
+    K = n_alternatives * len(KPIS_TO_COMPARE)
+    alpha_bonf = MultiRunStatistics.bonferroni_alpha(1 - CONFIDENCE_LEVEL, K)
+    print("\n  ===== Bonferroni-corrected (K={}, α_per_test={:.4f}) =====".format(
+        K, alpha_bonf))
+    print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name,
+                     alpha_per_test=alpha_bonf)
+    print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name,
+                     alpha_per_test=alpha_bonf)
+    print_comparison(baseline_stats, combo_c_stats, combo_c_alt.name,
+                     alpha_per_test=alpha_bonf)
 
     # ── Step 5: Recommendations ──────────────────────────────────────────────
     section("FINAL RECOMMENDATIONS")

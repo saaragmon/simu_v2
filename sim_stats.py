@@ -258,7 +258,7 @@ class MultiRunStatistics:
 
     # ── Welch's two-sample t-test (independent samples) ─────────────────────
 
-    def welch_t_test(self, other, kpi):
+    def welch_t_test(self, other, kpi, alpha=None):
         """
         Welch's two-sample t-test for two independent groups with unequal
         variances. This is the appropriate test when each replication uses
@@ -274,10 +274,18 @@ class MultiRunStatistics:
         H0: the two scenarios have equal means.
         Reject H0 (two-tailed) when 0 is outside the CI (equivalently |t| > t_crit).
 
+        Args:
+            alpha: per-test significance level. Defaults to (1 - confidence_level).
+                Pass a smaller value to apply a Bonferroni correction
+                (alpha_total / K, where K is the number of simultaneous tests).
+
         Returns:
             dict with keys: diff, se, df, t_stat, t_crit, ci_lower,
-            ci_upper, reject_H0
+            ci_upper, reject_H0, alpha_used
         """
+        if alpha is None:
+            alpha = self._alpha()
+
         v1 = self._kpi_values(kpi)
         v2 = other._kpi_values(kpi)
         n1, n2 = len(v1), len(v2)
@@ -291,11 +299,12 @@ class MultiRunStatistics:
 
         se = math.sqrt(s1_sq / n1 + s2_sq / n2)
         if se == 0:
-            t_crit = self._t_critical(n1 + n2 - 2, self._alpha())
+            t_crit = self._t_critical(n1 + n2 - 2, alpha)
             return {
                 'diff': diff, 'se': 0.0, 'df': n1 + n2 - 2,
                 't_stat': 0.0, 't_crit': t_crit,
                 'ci_lower': diff, 'ci_upper': diff, 'reject_H0': False,
+                'alpha_used': alpha,
             }
 
         t_stat = diff / se
@@ -305,18 +314,32 @@ class MultiRunStatistics:
         den = ((s1_sq / n1) ** 2) / (n1 - 1) + ((s2_sq / n2) ** 2) / (n2 - 1)
         df = num / den
 
-        t_crit = self._t_critical(df, self._alpha())
+        t_crit = self._t_critical(df, alpha)
         margin = t_crit * se
         return {
-            'diff':     diff,
-            'se':       se,
-            'df':       df,
-            't_stat':   t_stat,
-            't_crit':   t_crit,
-            'ci_lower': diff - margin,
-            'ci_upper': diff + margin,
-            'reject_H0': abs(t_stat) > t_crit,
+            'diff':       diff,
+            'se':         se,
+            'df':         df,
+            't_stat':     t_stat,
+            't_crit':     t_crit,
+            'ci_lower':   diff - margin,
+            'ci_upper':   diff + margin,
+            'reject_H0':  abs(t_stat) > t_crit,
+            'alpha_used': alpha,
         }
+
+    # ── Bonferroni helper ───────────────────────────────────────────────────
+
+    @staticmethod
+    def bonferroni_alpha(alpha_total, n_comparisons):
+        """Per-test α under Bonferroni: α_total / K.
+
+        Use when running K simultaneous Welch comparisons and you want
+        family-wise confidence (1 - α_total) across all of them.
+        """
+        if n_comparisons < 1:
+            raise ValueError("n_comparisons must be >= 1")
+        return alpha_total / n_comparisons
 
     # ── Paired t-test (only valid with Common Random Numbers) ────────────────
 
