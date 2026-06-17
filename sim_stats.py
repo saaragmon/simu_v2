@@ -6,11 +6,8 @@ Metrics collection, aggregation, and statistical analysis for the simulation.
 Collected per-run metrics:
     - Average satisfaction score of all departed entities      (KPI)
     - Total revenue (ticket + overnight + merch + photo + food) (KPI)
-    - Total number of departed entities                        (KPI)
     - Average queue wait per station
-    - Queue abandonment rate per station
-    - Station utilisation
-    - Number of overnight stays
+    - Average queue length per station                         (KPI)
 
 Statistical analysis across replications:
     - Welch's moving average (warm-up / heating-time identification)
@@ -87,19 +84,14 @@ class RunStatistics:
     The engine writes here as events occur:
         - record_entity()    when an entity departs
         - record_queue_wait() when service begins for a queued entity
-        - record_abandonment() when an entity gives up waiting
     Read the aggregate KPIs via the @property accessors at the end of the run.
     """
 
     def __init__(self):
         self.entity_records:     List[EntityRecord]     = []
         self.queue_wait_times:   Dict[str, List[float]] = {}
-        self.abandonments:       Dict[str, int]         = {}
-        self.station_busy_time:  Dict[str, float]       = {}
-        self.station_total_time: Dict[str, float]       = {}
         self.queue_length_by_station: Dict[str, float]  = {}
         self.total_revenue:      float                  = 0.0
-        self.num_overnight:      int                    = 0
 
     # ── Recording helpers ─────────────────────────────────────────────────────
 
@@ -111,17 +103,6 @@ class RunStatistics:
     def record_queue_wait(self, station, wait_minutes):
         """Record one waiting-time observation at the given station."""
         self.queue_wait_times.setdefault(station, []).append(wait_minutes)
-
-    def record_abandonment(self, station):
-        """Increment the abandonment counter for the given station."""
-        self.abandonments[station] = self.abandonments.get(station, 0) + 1
-
-    def record_station_busy(self, station, duration):
-        self.station_busy_time[station] = (
-            self.station_busy_time.get(station, 0.0) + duration)
-
-    def set_station_total_time(self, station, total):
-        self.station_total_time[station] = total
 
     # ── Aggregate KPIs ────────────────────────────────────────────────────────
 
@@ -163,50 +144,16 @@ class RunStatistics:
         """
         self.queue_length_by_station = dict(lengths_by_station)
 
-    @property
-    def total_entities(self):
-        """Number of entities that completed the simulation."""
-        return len(self.entity_records)
-
-    @property
-    def abandonment_rate(self):
-        """Proportion of arrivals that abandoned each station's queue."""
-        result = {}
-        for station, count in self.abandonments.items():
-            total_served = len(self.queue_wait_times.get(station, []))
-            total = total_served + count
-            if total > 0:
-                result[station] = count / total
-            else:
-                result[station] = 0.0
-        return result
-
-    @property
-    def utilisation(self):
-        """Server-busy fraction per station (rough, only set if measured)."""
-        result = {}
-        for station, busy in self.station_busy_time.items():
-            total = self.station_total_time.get(station, 1.0)
-            if total > 0:
-                result[station] = busy / total
-            else:
-                result[station] = 0.0
-        return result
-
     def summary(self):
         """Return a flat dictionary of KPIs (convenient for printing)."""
         return {
             'avg_satisfaction':    round(self.avg_satisfaction, 4),
-            'total_entities':      self.total_entities,
             'total_revenue_NIS':   round(self.total_revenue, 2),
-            'num_overnight':       self.num_overnight,
             'avg_queue_wait':      {k: round(v, 4)
                                     for k, v in self.avg_queue_wait.items()},
             'avg_queue_length':    round(self.avg_queue_length, 4),
             'queue_length_by_station': {k: round(v, 4)
                                         for k, v in self.queue_length_by_station.items()},
-            'abandonment_rate':    {k: round(v, 4)
-                                    for k, v in self.abandonment_rate.items()},
         }
 
 
@@ -253,7 +200,6 @@ class MultiRunStatistics:
         mapping = {
             'avg_satisfaction':   lambda r: r.avg_satisfaction,
             'total_revenue':      lambda r: r.total_revenue,
-            'total_entities':     lambda r: float(r.total_entities),
             'avg_queue_length':   lambda r: r.avg_queue_length,
         }
         if kpi not in mapping:
@@ -312,22 +258,34 @@ class MultiRunStatistics:
 
     # ── Welch's two-sample t-test (independent samples) ─────────────────────
 
-    def welch_t_test(self, other, kpi):
+    def welch_t_test(self, other, kpi, alpha=None):
         """
         Welch's two-sample t-test for two independent groups with unequal
         variances. This is the appropriate test when each replication uses
         an independent RNG seed (no CRN).
 
-            t  = (x_bar1 - x_bar2) / sqrt(s1^2/n1 + s2^2/n2)
-            df = (s1^2/n1 + s2^2/n2)^2
-                 / ((s1^2/n1)^2 / (n1-1) + (s2^2/n2)^2 / (n2-1))
+            diff = x_bar1 - x_bar2
+            se   = sqrt(s1^2/n1 + s2^2/n2)
+            t    = diff / se
+            df   = (s1^2/n1 + s2^2/n2)^2
+                   / ((s1^2/n1)^2 / (n1-1) + (s2^2/n2)^2 / (n2-1))
+            CI   = diff ± t_{α/2, df} · se
 
         H0: the two scenarios have equal means.
-        Reject H0 (two-tailed) when |t| > t_{α/2, df}.
+        Reject H0 (two-tailed) when 0 is outside the CI (equivalently |t| > t_crit).
+
+        Args:
+            alpha: per-test significance level. Defaults to (1 - confidence_level).
+                Pass a smaller value to apply a Bonferroni correction
+                (alpha_total / K, where K is the number of simultaneous tests).
 
         Returns:
-            (t_statistic, t_critical, reject_H0_boolean)
+            dict with keys: diff, se, df, t_stat, t_crit, ci_lower,
+            ci_upper, reject_H0, alpha_used
         """
+        if alpha is None:
+            alpha = self._alpha()
+
         v1 = self._kpi_values(kpi)
         v2 = other._kpi_values(kpi)
         n1, n2 = len(v1), len(v2)
@@ -337,20 +295,51 @@ class MultiRunStatistics:
         m1, m2 = _stats.mean(v1), _stats.mean(v2)
         s1_sq = _stats.variance(v1)
         s2_sq = _stats.variance(v2)
+        diff = m1 - m2
 
         se = math.sqrt(s1_sq / n1 + s2_sq / n2)
         if se == 0:
-            return 0.0, self._t_critical(n1 + n2 - 2, self._alpha()), False
+            t_crit = self._t_critical(n1 + n2 - 2, alpha)
+            return {
+                'diff': diff, 'se': 0.0, 'df': n1 + n2 - 2,
+                't_stat': 0.0, 't_crit': t_crit,
+                'ci_lower': diff, 'ci_upper': diff, 'reject_H0': False,
+                'alpha_used': alpha,
+            }
 
-        t_stat = (m1 - m2) / se
+        t_stat = diff / se
 
         # Welch–Satterthwaite degrees of freedom
         num = (s1_sq / n1 + s2_sq / n2) ** 2
         den = ((s1_sq / n1) ** 2) / (n1 - 1) + ((s2_sq / n2) ** 2) / (n2 - 1)
         df = num / den
 
-        t_crit = self._t_critical(df, self._alpha())
-        return t_stat, t_crit, abs(t_stat) > t_crit
+        t_crit = self._t_critical(df, alpha)
+        margin = t_crit * se
+        return {
+            'diff':       diff,
+            'se':         se,
+            'df':         df,
+            't_stat':     t_stat,
+            't_crit':     t_crit,
+            'ci_lower':   diff - margin,
+            'ci_upper':   diff + margin,
+            'reject_H0':  abs(t_stat) > t_crit,
+            'alpha_used': alpha,
+        }
+
+    # ── Bonferroni helper ───────────────────────────────────────────────────
+
+    @staticmethod
+    def bonferroni_alpha(alpha_total, n_comparisons):
+        """Per-test α under Bonferroni: α_total / K.
+
+        Use when running K simultaneous Welch comparisons and you want
+        family-wise confidence (1 - α_total) across all of them.
+        """
+        if n_comparisons < 1:
+            raise ValueError("n_comparisons must be >= 1")
+        return alpha_total / n_comparisons
 
     # ── Paired t-test (only valid with Common Random Numbers) ────────────────
 
@@ -431,7 +420,7 @@ class MultiRunStatistics:
             "=" * 60,
         ]
         for kpi in ['avg_satisfaction', 'total_revenue',
-                    'total_entities', 'avg_queue_length']:
+                    'avg_queue_length']:
             try:
                 mean, lo, hi = self.confidence_interval(kpi)
                 lines.append(

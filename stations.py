@@ -435,7 +435,7 @@ class MainStage(Stage):# Show duration ~ Normal(mu=45.90, sigma=8.97) minutes, f
         return self._duration_sampler()
 
     def set_duration_sampler(self, sampler) -> None: # Called by engine.py to inject the live Excel-fitted sampler
-        """Inject a fitted duration sampler from distribution_fitting module."""
+        """Inject a fitted duration sampler from the distributions module."""
         self._duration_sampler = sampler
 
     def is_back_row(self, entity: 'Entity') -> bool:

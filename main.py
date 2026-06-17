@@ -16,7 +16,7 @@ from alternatives import (
     build_baseline, build_combo_a, build_combo_b, build_combo_c,
     ALL_ALTERNATIVES,
 )
-from distribution_fitting import fit_from_excel
+from distributions import fit_from_excel
 from plotting import RunPlotter, KPIComparisonPlotter, plot_heating_time_data
 from warmup import WarmupSimulation
 
@@ -36,8 +36,7 @@ CONFIDENCE_LEVEL = 0.9
 RELATIVE_PRECISION = 0.10
 
 # KPIs we will optimise / compare across scenarios.
-KPIS_TO_COMPARE = ['avg_satisfaction', 'total_revenue',
-                   'total_entities', 'avg_queue_length']
+KPIS_TO_COMPARE = ['avg_satisfaction', 'total_revenue', 'avg_queue_length']
 
 # For each KPI, is "higher" the better outcome?
 # Used both in the recommendation (max vs min) and in the comparison
@@ -45,7 +44,6 @@ KPIS_TO_COMPARE = ['avg_satisfaction', 'total_revenue',
 KPI_HIGHER_IS_BETTER = {
     'avg_satisfaction':   True,
     'total_revenue':      True,
-    'total_entities':     True,
     'avg_queue_length':   False,   # shorter queues = better
 }
 
@@ -81,10 +79,11 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
 
     If `plot=True`, every run also saves a dashboard PNG to `plots/`.
 
-    All scenarios share the same base_seed default, so run i of every
-    scenario sees the same random stream → Common Random Numbers (CRN).
-    That makes Welch's t-test slightly conservative but enables the paired
-    t-test as a stronger alternative.
+    Each scenario is called with a DIFFERENT base_seed so the random
+    streams across scenarios are disjoint (no Common Random Numbers).
+    Replications within a scenario are still reproducible (seed = base_seed + i)
+    but independent of replications in other scenarios — the precondition
+    for Welch's two-sample t-test.
     """
     multi = MultiRunStatistics(CONFIDENCE_LEVEL, RELATIVE_PRECISION)
     print("\n  Running '{}' — {} replications ...".format(name, num_runs))
@@ -101,10 +100,11 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
         multi.add_run(stats)
         elapsed = time.time() - t0
         s = stats.summary()
-        print("    Run {:3d}/{}  entities={:4d}  avg_sat={:.3f}  "
-              "revenue={:,.0f} NIS  ({:.2f}s)".format(
-                  i + 1, num_runs, s['total_entities'],
-                  s['avg_satisfaction'], s['total_revenue_NIS'], elapsed))
+        print("    Run {:3d}/{}  avg_sat={:.3f}  "
+              "revenue={:,.0f} NIS  qlen={:.2f}  ({:.2f}s)".format(
+                  i + 1, num_runs,
+                  s['avg_satisfaction'], s['total_revenue_NIS'],
+                  s['avg_queue_length'], elapsed))
 
         if plot:
             label = '{}_run{:02d}'.format(name, i + 1)
@@ -113,32 +113,45 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
     return multi
 
 
-def print_comparison(baseline, alternative, alt_name):
+def print_comparison(baseline, alternative, alt_name, alpha_per_test=None):
     """
     Compare one alternative scenario against the baseline using Welch's
     two-sample t-test (appropriate for independent samples).
 
-    Reports per KPI:
-        - t-statistic
-        - critical value t_{α/2, df}
-        - whether the difference is statistically significant
-        - whether the alternative is BETTER (↑) or WORSE (↓) than the
-          baseline, accounting for the KPI's direction.
+    Reports per KPI, hotel-project style:
+        - mean difference (baseline - alternative)
+        - confidence interval on the difference
+        - verdict by checking whether 0 is inside the interval
+
+    Pass `alpha_per_test` to apply a Bonferroni-corrected level
+    (e.g. alpha_total / K) so the family-wise confidence is preserved.
     """
+    if alpha_per_test is None:
+        conf_pct = int(round(CONFIDENCE_LEVEL * 100))
+    else:
+        conf_pct = round((1 - alpha_per_test) * 100, 2)
     print("\n  --- {} vs Baseline (Welch's t-test) ---".format(alt_name))
     for kpi in KPIS_TO_COMPARE:
         try:
-            # diffs are computed as (baseline - alt), so:
-            # t_stat < 0  =>  alt is HIGHER than baseline
-            t_stat, t_crit, reject = baseline.welch_t_test(alternative, kpi)
-            alt_is_higher = t_stat < 0
+            r = baseline.welch_t_test(alternative, kpi, alpha=alpha_per_test)
+            diff = r['diff']         # baseline − alternative
+            lo, hi = r['ci_lower'], r['ci_upper']
             higher_is_better = KPI_HIGHER_IS_BETTER.get(kpi, True)
-            alt_is_better = (alt_is_higher == higher_is_better)
-            direction = "↑ better" if alt_is_better else "↓ worse"
-            verdict = "SIGNIFICANT" if reject else "not significant"
-            print("    {:25s}: t={:+7.3f}  t_crit={:.3f}  -> {} {}".format(
-                kpi, t_stat, t_crit, verdict,
-                direction if reject else ""))
+
+            print("    {}".format(kpi))
+            print("      Mean difference (baseline - {}): {:+.4f}".format(
+                alt_name, diff))
+            print("      {}% Confidence Interval: [{:+.4f}, {:+.4f}]".format(
+                conf_pct, lo, hi))
+
+            if lo > 0:
+                winner = 'Baseline' if higher_is_better else alt_name
+                print("      0 outside CI → {} significantly better".format(winner))
+            elif hi < 0:
+                winner = alt_name if higher_is_better else 'Baseline'
+                print("      0 outside CI → {} significantly better".format(winner))
+            else:
+                print("      0 inside CI → cannot determine which is better")
         except Exception as e:
             print("    {}: ERROR — {}".format(kpi, e))
 
@@ -225,6 +238,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=1000,
         plot=args.plot,
     )
     print(baseline_stats.report())
@@ -262,6 +276,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=11000,
         plot=args.plot,
     )
     print(combo_a_stats.report())
@@ -273,6 +288,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=21000,
         plot=args.plot,
     )
     print(combo_b_stats.report())
@@ -284,6 +300,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
+        base_seed=31000,
         plot=args.plot,
     )
     print(combo_c_stats.report())
@@ -301,11 +318,29 @@ def main(args):
         with degrees of freedom given by the Welch-Satterthwaite
         equation.  We reject H0 (means equal) at confidence 1 - α
         when |t| > t_{α/2, df}.
+
+        First pass: per-test α = 1 - CL (each comparison stands alone).
+        Second pass: Bonferroni-corrected per-test α = α_total / K so
+        the family-wise confidence across all comparisons stays at 1 - α_total.
     """)
 
+    print("\n  ===== Per-test α (no Bonferroni) =====")
     print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name)
     print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name)
     print_comparison(baseline_stats, combo_c_stats, combo_c_alt.name)
+
+    # Bonferroni: K = (# alternatives compared to baseline) × (# KPIs)
+    n_alternatives = 3
+    K = n_alternatives * len(KPIS_TO_COMPARE)
+    alpha_bonf = MultiRunStatistics.bonferroni_alpha(1 - CONFIDENCE_LEVEL, K)
+    print("\n  ===== Bonferroni-corrected (K={}, α_per_test={:.4f}) =====".format(
+        K, alpha_bonf))
+    print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name,
+                     alpha_per_test=alpha_bonf)
+    print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name,
+                     alpha_per_test=alpha_bonf)
+    print_comparison(baseline_stats, combo_c_stats, combo_c_alt.name,
+                     alpha_per_test=alpha_bonf)
 
     # ── Step 5: Recommendations ──────────────────────────────────────────────
     section("FINAL RECOMMENDATIONS")
