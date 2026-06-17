@@ -697,10 +697,19 @@ def _uniform_cdf(a: float, b: float) -> Callable[[float], float]:
 
 # ── Fit candidate distributions and select best via KS statistic ─────────────
 
-def best_fit(data: List[float], label: str = '') -> Tuple[str, dict, Callable]:
+def best_fit(data: List[float], label: str = '',
+             alpha: float = 0.01) -> Tuple[str, dict, Callable]:
     """
     Try Exponential, Normal, and Uniform fits on the data.
-    Select the distribution with the smallest KS statistic.
+    Select the distribution with the smallest KS statistic, then run a
+    formal Kolmogorov-Smirnov test on the winner at significance `alpha`.
+
+    The critical values come from the course formula sheet (Table 1) and
+    use the Lilliefors-style adjusted statistic when the fitted
+    distribution had its parameters estimated from the data:
+        Normal(mu_hat, sigma_hat): adj = (sqrt(n) - 0.01 + 0.85/sqrt(n)) * D
+        Exponential(mean_hat):     adj = (sqrt(n) + 0.26 + 0.5/sqrt(n)) * (D - 0.2/n)
+        All other / params known:  adj = (sqrt(n) + 0.12 + 0.11/sqrt(n)) * D
 
     Returns:
         (dist_name, params_dict, sampler_callable)
@@ -774,6 +783,45 @@ def best_fit(data: List[float], label: str = '') -> Tuple[str, dict, Callable]:
     for name, info in candidates.items():
         mark = ' ◄ SELECTED' if name == best_name else ''
         print(f"  {name:12s}: KS={info['ks']:.4f}  params={info['params']}{mark}")
+
+    # Formal KS test on the selected distribution.
+    # Critical-value table (course formula sheet, page 2).
+    # Rows = test variant; columns = alpha.
+    ks_table = {
+        'Normal_lilliefors': {0.15: 0.775, 0.10: 0.819, 0.05: 0.895,
+                              0.025: 0.955, 0.01: 1.035},
+        'Exponential':       {0.15: 0.926, 0.10: 0.990, 0.05: 1.094,
+                              0.025: 1.190, 0.01: 1.308},
+        'Params_known':      {0.15: 1.138, 0.10: 1.224, 0.05: 1.358,
+                              0.025: 1.480, 0.01: 1.628},
+    }
+
+    n      = len(data)
+    sqrt_n = math.sqrt(n)
+    D      = best['ks']
+
+    if best_name == 'Normal':
+        adj_stat = (sqrt_n - 0.01 + 0.85 / sqrt_n) * D
+        c_crit   = ks_table['Normal_lilliefors'].get(alpha)
+        variant  = 'Lilliefors-corrected (Normal with estimated mu, sigma)'
+    elif best_name == 'Exponential':
+        adj_stat = (sqrt_n + 0.26 + 0.5 / sqrt_n) * (D - 0.2 / n)
+        c_crit   = ks_table['Exponential'].get(alpha)
+        variant  = 'Adjusted (Exponential with estimated mean)'
+    else:  # Uniform: a, b come from data min/max — treat as the generic row
+        adj_stat = (sqrt_n + 0.12 + 0.11 / sqrt_n) * D
+        c_crit   = ks_table['Params_known'].get(alpha)
+        variant  = 'Generic KS critical value'
+
+    if c_crit is None:
+        print(f"  KS test: alpha={alpha} not in table "
+              f"(supported: 0.15, 0.10, 0.05, 0.025, 0.01)")
+    else:
+        accepted = adj_stat < c_crit
+        verdict  = 'ACCEPT H0' if accepted else 'REJECT H0'
+        print(f"  KS test ({variant})")
+        print(f"    alpha={alpha:.2f}  adj_stat={adj_stat:.4f}  "
+              f"c_crit={c_crit:.4f}  -> {verdict}")
 
     # Return selected distribution name, parameters, and sampler function.
     return best_name, best['params'], best['sampler']
