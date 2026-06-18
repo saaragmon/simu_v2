@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -29,6 +30,14 @@ EXCEL_PATH = os.path.join(os.path.dirname(__file__),
 # Default number of replications per scenario. The user can override
 # this with the --runs CLI flag.
 DEFAULT_RUNS = 20
+
+# Pilot study size for variance estimation (Tutorial 10, steel-plant
+# example uses n0=15).
+PILOT_RUNS = 15
+
+# Common Random Numbers base seed. All scenarios use the same seed
+# so replication i shares the RNG stream across scenarios → paired t-test.
+CRN_BASE_SEED = 1000
 
 # Required by the project spec (p. 7): confidence level 0.9 (α = 0.1) and
 # relative precision 0.1 for every comparison.
@@ -79,11 +88,11 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
 
     If `plot=True`, every run also saves a dashboard PNG to `plots/`.
 
-    Each scenario is called with a DIFFERENT base_seed so the random
-    streams across scenarios are disjoint (no Common Random Numbers).
-    Replications within a scenario are still reproducible (seed = base_seed + i)
-    but independent of replications in other scenarios — the precondition
-    for Welch's two-sample t-test.
+    All scenarios are called with the SAME `base_seed`, so replication i
+    of every scenario draws from the same RNG stream — this is Common
+    Random Numbers (CRN), the precondition for the paired t-test (see
+    Tutorial 10, slide 17). Inducing positive correlation between paired
+    runs reduces Var(x_i − y_i) and gives a more powerful test.
     """
     multi = MultiRunStatistics(CONFIDENCE_LEVEL, RELATIVE_PRECISION)
     print("\n  Running '{}' — {} replications ...".format(name, num_runs))
@@ -115,11 +124,14 @@ def run_scenario(name, cfg, num_runs, friends_sampler, main_stage_sampler,
 
 def print_comparison(baseline, alternative, alt_name, alpha_per_test=None):
     """
-    Compare one alternative scenario against the baseline using Welch's
-    two-sample t-test (appropriate for independent samples).
+    Compare one alternative scenario against the baseline using the
+    paired two-sample t-test (Tutorial 10, slides 8–10). This is the
+    correct test under CRN: replication i in both scenarios shares the
+    same RNG stream, so the differences z_i = x_i − y_i have lower
+    variance than independent samples.
 
-    Reports per KPI, hotel-project style:
-        - mean difference (baseline - alternative)
+    Reports per KPI:
+        - mean of paired differences (baseline - alternative)
         - confidence interval on the difference
         - verdict by checking whether 0 is inside the interval
 
@@ -130,10 +142,10 @@ def print_comparison(baseline, alternative, alt_name, alpha_per_test=None):
         conf_pct = int(round(CONFIDENCE_LEVEL * 100))
     else:
         conf_pct = round((1 - alpha_per_test) * 100, 2)
-    print("\n  --- {} vs Baseline (Welch's t-test) ---".format(alt_name))
+    print("\n  --- {} vs Baseline (paired t-test, CRN) ---".format(alt_name))
     for kpi in KPIS_TO_COMPARE:
         try:
-            r = baseline.welch_t_test(alternative, kpi, alpha=alpha_per_test)
+            r = baseline.paired_t_test(alternative, kpi, alpha=alpha_per_test)
             diff = r['diff']         # baseline − alternative
             lo, hi = r['ci_lower'], r['ci_upper']
             higher_is_better = KPI_HIGHER_IS_BETTER.get(kpi, True)
@@ -223,8 +235,67 @@ def main(args):
         sim.plot_heating_time_data(sim.daily_avg_queue_lengths, 'Average Queue Length')
         sim.plot_heating_time_data(sim.daily_avg_satisfactions, 'Average Satisfaction')
 
+    # ── Step 1.7: Pilot study + required-runs calculation ────────────────────
+    # K = (#alternatives compared to baseline) × (#KPIs) — same K used
+    # later in Step 4 for the Bonferroni-corrected comparison.
+    n_alternatives = 3
+    K = n_alternatives * len(KPIS_TO_COMPARE)
+    alpha_bonf = MultiRunStatistics.bonferroni_alpha(1 - CONFIDENCE_LEVEL, K)
+
+    if args.runs:
+        total_runs = args.runs
+        section("[1.7] Pilot study (skipped — --runs={} forces n)".format(args.runs))
+        paragraph("""
+            User supplied --runs explicitly, so the pilot-based n*
+            calculation is bypassed.
+        """)
+    else:
+        section("[1.7] Pilot study & required-runs (n*)")
+        paragraph("""
+            Tutorial 10 (slide 6) prescribes a two-step procedure for
+            sizing the replication count:
+
+              1. Run n0 = {} pilot replications, estimate s and x_bar
+                 for every KPI.
+              2. Compute the required count:
+
+                    n* = ceil( (t_{{α/2, n0-1}} · s / (γ' · x_bar))^2 )
+
+                 where γ' = γ / (1 + γ) and γ = {:.2f} is the relative
+                 precision goal.
+
+            We use the Bonferroni-corrected α (α_total / K = {:.4f} / {}
+            = {:.5f}) so that the precision goal respects family-wise
+            confidence across all comparisons.
+
+            Final n is max(n*) across the {} KPIs (we need every KPI
+            to meet the precision goal).
+        """.format(PILOT_RUNS, RELATIVE_PRECISION,
+                   1 - CONFIDENCE_LEVEL, K, alpha_bonf,
+                   len(KPIS_TO_COMPARE)))
+
+        pilot_stats = run_scenario(
+            name='Baseline_pilot',
+            cfg=baseline_alt.config,
+            num_runs=PILOT_RUNS,
+            friends_sampler=friends_sampler,
+            main_stage_sampler=main_stage_sampler,
+            base_seed=CRN_BASE_SEED,
+            plot=False,
+        )
+
+        per_kpi_n = {}
+        for kpi in KPIS_TO_COMPARE:
+            n_needed = pilot_stats.required_replications(
+                kpi, pilot_runs=PILOT_RUNS, alpha=alpha_bonf)
+            per_kpi_n[kpi] = n_needed
+            print("    {:25s}  n* = {:4d}".format(kpi, n_needed))
+
+        total_runs = max(max(per_kpi_n.values()), PILOT_RUNS)
+        print("\n  → Using n = max(n*) = {} replications per scenario".format(
+            total_runs))
+
     # ── Step 2: Full baseline run ────────────────────────────────────────────
-    total_runs = args.runs if args.runs else DEFAULT_RUNS
 
     section("[2] Full baseline ({} replications)".format(total_runs))
     paragraph("""
@@ -238,7 +309,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
-        base_seed=1000,
+        base_seed=CRN_BASE_SEED,
         plot=args.plot,
     )
     print(baseline_stats.report())
@@ -276,7 +347,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
-        base_seed=11000,
+        base_seed=CRN_BASE_SEED,
         plot=args.plot,
     )
     print(combo_a_stats.report())
@@ -288,7 +359,7 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
-        base_seed=21000,
+        base_seed=CRN_BASE_SEED,
         plot=args.plot,
     )
     print(combo_b_stats.report())
@@ -300,28 +371,81 @@ def main(args):
         num_runs=total_runs,
         friends_sampler=friends_sampler,
         main_stage_sampler=main_stage_sampler,
-        base_seed=31000,
+        base_seed=CRN_BASE_SEED,
         plot=args.plot,
     )
     print(combo_c_stats.report())
 
-    # ── Step 4: Statistical comparison ───────────────────────────────────────
-    section("[4] Statistical comparison (Welch's two-sample t-test)")
+    # ── Step 3.5: Relative-precision verification ────────────────────────────
+    section("[3.5] Relative-precision verification")
     paragraph("""
-        Welch's t-test is appropriate because the replications across
-        scenarios are independent (no Common Random Numbers).  Test
-        statistic:
+        After the full runs we verify the relative-precision criterion
+        for every scenario × KPI (Hotel example; Tutorial 10 slide 5):
 
-            t = (x_bar_baseline - x_bar_alt)
-                / sqrt(s_baseline^2 / n + s_alt^2 / n)
+            relative_error = t_{{α/2, n-1}} · s / (sqrt(n) · |x_bar|)
+            threshold      = γ / (1 + γ) = {:.4f}
+            criterion      = relative_error ≤ threshold
 
-        with degrees of freedom given by the Welch-Satterthwaite
-        equation.  We reject H0 (means equal) at confidence 1 - α
-        when |t| > t_{α/2, df}.
+        α here is the Bonferroni-corrected α_total / K so the precision
+        budget is respected family-wise. If any cell fails the criterion,
+        n* was an under-estimate (often happens when the pilot variance
+        was unrepresentative); top up the runs and re-check.
+    """.format(RELATIVE_PRECISION / (1 + RELATIVE_PRECISION)))
 
-        First pass: per-test α = 1 - CL (each comparison stands alone).
-        Second pass: Bonferroni-corrected per-test α = α_total / K so
-        the family-wise confidence across all comparisons stays at 1 - α_total.
+    all_scenarios = {
+        'Baseline':       baseline_stats,
+        combo_a_alt.name: combo_a_stats,
+        combo_b_alt.name: combo_b_stats,
+        combo_c_alt.name: combo_c_stats,
+    }
+
+    failed = []
+    print("\n  {:18s}  {:25s}  {:>12s}  {:>12s}  {}".format(
+        "Scenario", "KPI", "rel_error", "threshold", "meets"))
+    for scen_name, stats_obj in all_scenarios.items():
+        for kpi in KPIS_TO_COMPARE:
+            try:
+                r = stats_obj.relative_precision_check(kpi, alpha=alpha_bonf)
+                mark = "✓" if r['meets'] else "✗"
+                print("  {:18s}  {:25s}  {:>12.4f}  {:>12.4f}  {}".format(
+                    scen_name, kpi, r['relative_error'], r['threshold'], mark))
+                if not r['meets']:
+                    failed.append((scen_name, kpi, r))
+            except Exception as e:
+                print("  {:18s}  {:25s}  ERROR — {}".format(scen_name, kpi, e))
+
+    if failed:
+        print("\n  ⚠  {} cell(s) failed the criterion.".format(len(failed)))
+        # Solve n_new from: relative_error_now * sqrt(n) = threshold * sqrt(n_new)
+        # ⇒ n_new = n * (rel_error / threshold)^2
+        worst_scaling = max(
+            (r['relative_error'] / r['threshold']) ** 2 for _, _, r in failed
+        )
+        n_top_up = math.ceil(total_runs * worst_scaling)
+        print("  Suggested top-up: increase replications "
+              "{} → {} (factor = {:.2f}).".format(
+                  total_runs, n_top_up, worst_scaling))
+        print("  Re-run with `python3 main.py --runs {}`.".format(n_top_up))
+    else:
+        print("\n  ✓  All KPIs in all scenarios meet the relative-precision goal.")
+
+    # ── Step 4: Statistical comparison ───────────────────────────────────────
+    section("[4] Statistical comparison (paired t-test, CRN)")
+    paragraph("""
+        Replications i across scenarios share an RNG stream (CRN), so
+        the paired t-test from Tutorial 10 (slides 8–10) applies. Define
+        z_i = x_baseline,i − x_alt,i; test:
+
+            t = mean(z) / (s_z / sqrt(n))      df = n − 1
+
+        Reject H0 (paired means equal) at confidence 1 − α when 0 is
+        outside the CI mean(z) ± t_{α/2, n-1} · s_z / sqrt(n).
+
+        First pass: per-test α = 1 − CL (each comparison stands alone).
+        Second pass: Bonferroni-corrected per-test α = α_total / K with
+        K = (#alternatives) × (#KPIs), so the family-wise confidence
+        across all comparisons stays at 1 − α_total (Tutorial 10 slide 7,
+        Tutorial 11 slide 14).
     """)
 
     print("\n  ===== Per-test α (no Bonferroni) =====")
@@ -329,10 +453,7 @@ def main(args):
     print_comparison(baseline_stats, combo_b_stats, combo_b_alt.name)
     print_comparison(baseline_stats, combo_c_stats, combo_c_alt.name)
 
-    # Bonferroni: K = (# alternatives compared to baseline) × (# KPIs)
-    n_alternatives = 3
-    K = n_alternatives * len(KPIS_TO_COMPARE)
-    alpha_bonf = MultiRunStatistics.bonferroni_alpha(1 - CONFIDENCE_LEVEL, K)
+    # Bonferroni: K and alpha_bonf were already computed in Step 1.7.
     print("\n  ===== Bonferroni-corrected (K={}, α_per_test={:.4f}) =====".format(
         K, alpha_bonf))
     print_comparison(baseline_stats, combo_a_stats, combo_a_alt.name,
