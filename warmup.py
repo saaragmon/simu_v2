@@ -42,13 +42,13 @@ class WarmupSimulation:
         sim.plot_heating_time_data(sim.daily_total_revenues, 'Total Revenue')
     """
 
-    def __init__(self, n_runs: int = 30):
+    def __init__(self, n_runs: int = 30, cfg=None):
         self.n_runs = n_runs
 
         samplers = fit_from_excel(_EXCEL_PATH)
         self._friends_sampler    = samplers.get('friends_interarrival')
         self._main_stage_sampler = samplers.get('main_stage_duration')
-        self._cfg = build_baseline().config
+        self._cfg = cfg if cfg is not None else build_baseline().config
 
         self.daily_avg_queue_lengths: List[float] = []
         self.daily_avg_satisfactions: List[float] = []
