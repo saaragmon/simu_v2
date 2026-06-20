@@ -231,18 +231,34 @@ class MultiRunStatistics:
 
     # ── Required replications (pilot-study formula) ─────────────────────────
 
-    def required_replications(self, kpi, pilot_runs=5):
+    def required_replications(self, kpi, pilot_runs=5, alpha=None):
         """
         Estimate the number of replications required to achieve the
-        configured relative precision δ at confidence level 1 - α.
+        configured relative precision γ at significance level α.
 
-        Formula (Banks et al., 'Discrete-Event System Simulation'):
+        Formula (Tutorial 10, slide 6 — "rough approximation"):
 
-            n* = ceil( (t_{α/2, n0-1} * s / (δ * x_bar))^2 )
+            n* = ceil( n0 * (δ0 / δt)^2 )
 
-        where n0 is the pilot-sample size, s is the sample std, x_bar the
-        sample mean, and δ the desired relative precision.
+        which is algebraically equivalent to:
+
+            n* = ceil( (t_{α/2, n0-1} * s / (γ' * x_bar))^2 )
+
+        where γ' = γ / (1 + γ) is the threshold from the relative-
+        precision rule. n0 is the pilot-sample size, s the sample std,
+        x_bar the sample mean.
+
+        Args:
+            kpi:        which KPI to compute n* for.
+            pilot_runs: how many of the first runs to use as the pilot
+                        (Tutorial 10 uses n0 = 15).
+            alpha:      per-test α. Defaults to (1 - confidence_level).
+                        Pass the Bonferroni-corrected α (α_total / K)
+                        so the n* respects family-wise confidence.
         """
+        if alpha is None:
+            alpha = self._alpha()
+
         values = self._kpi_values(kpi)[:pilot_runs]
         if len(values) < 2:
             return pilot_runs
@@ -252,9 +268,46 @@ class MultiRunStatistics:
             return pilot_runs
 
         std_val = _stats.stdev(values)
-        t_crit = self._t_critical(len(values) - 1, self._alpha())
-        n_star = (t_crit * std_val / (self.relative_precision * mean_val)) ** 2
+        t_crit = self._t_critical(len(values) - 1, alpha)
+        gamma = self.relative_precision
+        gamma_prime = gamma / (1 + gamma)
+        n_star = (t_crit * std_val / (gamma_prime * mean_val)) ** 2
         return max(pilot_runs, math.ceil(n_star))
+
+    def relative_precision_check(self, kpi, alpha=None):
+        """
+        Check whether the current sample already meets the configured
+        relative-precision criterion (Hotel example, Tutorial 10 slide 5):
+
+            relative_error = t_{α/2, n-1} · s / (sqrt(n) · |x_bar|)
+            threshold      = γ / (1 + γ)
+            meets          = relative_error ≤ threshold
+
+        Returns a dict: {relative_error, threshold, meets, mean, std, n}.
+        """
+        if alpha is None:
+            alpha = self._alpha()
+
+        values = self._kpi_values(kpi)
+        n = len(values)
+        if n < 2:
+            raise ValueError("Need at least 2 replications")
+
+        mean_val = _stats.mean(values)
+        std_val = _stats.stdev(values)
+        t_crit = self._t_critical(n - 1, alpha)
+        delta = t_crit * std_val / math.sqrt(n)
+        relative_error = delta / abs(mean_val) if mean_val != 0 else float('inf')
+        gamma = self.relative_precision
+        threshold = gamma / (1 + gamma)
+        return {
+            'relative_error': relative_error,
+            'threshold':      threshold,
+            'meets':          relative_error <= threshold,
+            'mean':           mean_val,
+            'std':            std_val,
+            'n':              n,
+        }
 
     # ── Welch's two-sample t-test (independent samples) ─────────────────────
 
@@ -343,14 +396,26 @@ class MultiRunStatistics:
 
     # ── Paired t-test (only valid with Common Random Numbers) ────────────────
 
-    def paired_t_test(self, other, kpi):
+    def paired_t_test(self, other, kpi, alpha=None):
         """
         Paired two-sample t-test. Valid only when run i of THIS scenario
         and run i of `other` used the same random-number stream (CRN).
 
         Under CRN the difference d_i = x_i - y_i has lower variance,
         giving a more powerful test. Without CRN, use welch_t_test instead.
+
+            z_i  = x_i - y_i           (paired differences)
+            t    = mean(z) / (s_z / sqrt(n))
+            CI   = mean(z) ± t_{α/2, n-1} · s_z / sqrt(n)
+
+        Reject H0 (paired means equal) when 0 is outside the CI.
+
+        Returns a dict with the same shape as welch_t_test so callers
+        (print_comparison, …) can use it interchangeably.
         """
+        if alpha is None:
+            alpha = self._alpha()
+
         v1 = self._kpi_values(kpi)
         v2 = other._kpi_values(kpi)
         n = min(len(v1), len(v2))
@@ -360,9 +425,35 @@ class MultiRunStatistics:
         diffs = [v1[i] - v2[i] for i in range(n)]
         mean_d = _stats.mean(diffs)
         std_d = _stats.stdev(diffs)
-        t_stat = mean_d / (std_d / math.sqrt(n))
-        t_crit = self._t_critical(n - 1, self._alpha())
-        return t_stat, t_crit, abs(t_stat) > t_crit
+        se = std_d / math.sqrt(n)
+
+        t_crit = self._t_critical(n - 1, alpha)
+        if se == 0:
+            return {
+                'diff':       mean_d,
+                'se':         0.0,
+                'df':         n - 1,
+                't_stat':     0.0,
+                't_crit':     t_crit,
+                'ci_lower':   mean_d,
+                'ci_upper':   mean_d,
+                'reject_H0':  False,
+                'alpha_used': alpha,
+            }
+
+        t_stat = mean_d / se
+        margin = t_crit * se
+        return {
+            'diff':       mean_d,
+            'se':         se,
+            'df':         n - 1,
+            't_stat':     t_stat,
+            't_crit':     t_crit,
+            'ci_lower':   mean_d - margin,
+            'ci_upper':   mean_d + margin,
+            'reject_H0':  abs(t_stat) > t_crit,
+            'alpha_used': alpha,
+        }
 
     # ── Heating-time (Welch's moving average) ───────────────────────────────
 
