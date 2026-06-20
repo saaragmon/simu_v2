@@ -32,15 +32,7 @@ _EXCEL_PATH = os.path.join(os.path.dirname(__file__), 'samples_for_simulation.xl
 
 
 class WarmupSimulation:
-    """
-    Mirrors the interface of the example hotel-simulation project:
 
-        sim = WarmupSimulation(30)
-        sim.run()
-        sim.plot_heating_time_data(sim.daily_avg_queue_lengths, 'Average Queue Length')
-        sim.plot_heating_time_data(sim.daily_avg_satisfactions, 'Average Satisfaction')
-        sim.plot_heating_time_data(sim.daily_total_revenues, 'Total Revenue')
-    """
 
     def __init__(self, n_runs: int = 30, cfg=None):
         self.n_runs = n_runs
