@@ -52,7 +52,10 @@ BUDGET_LIMIT = 1_000_000  # NIS
 
 
 # ─── Building blocks (id → name, cost, mutator) ──────────────────────────────
-BLOCKS: Dict[int, Tuple[str, int, Callable[[SimConfig], SimConfig]]] = {
+# Underscore-prefixed name avoids a collision with scan_alternatives.py's
+# `BLOCKS` (a list of 4-tuples) when both modules are pasted into the same
+# Jupyter notebook namespace.
+_BLOCKS: Dict[int, Tuple[str, int, Callable[[SimConfig], SimConfig]]] = {
     1: ('Kitchen',   500_000, alt_better_kitchen),
     2: ('Security',  650_000, alt_expanded_security),
     3: ('Bands',     300_000, alt_popular_bands),
@@ -61,6 +64,10 @@ BLOCKS: Dict[int, Tuple[str, int, Callable[[SimConfig], SimConfig]]] = {
     6: ('AutoScan',  600_000, alt_auto_ticket_scan),
     7: ('Gift',      200_000, alt_visitor_gift),
 }
+
+# Backward-compat alias (do NOT use in code that may share a namespace
+# with scan_alternatives.py).
+BLOCKS = _BLOCKS
 
 
 # ─── Combos: edit this dict to change which scenarios run ────────────────────
@@ -129,7 +136,7 @@ def _build_from_blocks(name: str, block_ids: List[int],
     parts: List[str] = []
     cost = 0
     for bid in block_ids:
-        bname, bcost, mutator = BLOCKS[bid]
+        bname, bcost, mutator = _BLOCKS[bid]
         cfg = mutator(cfg)
         parts.append(f"{bname} (#{bid})")
         cost += bcost
