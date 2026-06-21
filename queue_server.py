@@ -115,9 +115,10 @@ class QueueServer:
     def pop_at(self, index: int, removing_time: float):
         """
         Pop the entity at the given index, recording the served-from-queue
-        waiting time. Used by stages with MaxFill admission, where we need
-        to admit not always the head but the first entity that fits the
-        remaining capacity.
+        waiting time. Used by stages with first-fit FIFO admission: the
+        queue is walked in FIFO order and the first entity whose size
+        fits the remaining capacity is admitted. Oversized parties stay
+        in line and keep their position for the next admission cycle.
 
         Returns the entity, or ``None`` if the index is out of range.
         """
