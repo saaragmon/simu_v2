@@ -322,19 +322,17 @@ def main(args):
         1,000,000 NIS). Each combo was selected from the exhaustive
         scan (see scan_alternatives.py) as the leader in one category:
 
-          Combo_A = Extra photo+art (150k) + Marketing (200k)
-                    + Auto ticket scanning (600k) = 950k NIS
-                    OVERALL WINNER: best rank-sum across all 5 KPIs.
+          Combo_A — SATISFACTION KING: highest avg_satisfaction
+                    in the scan.
 
-          Combo_B = Marketing (200k) + Auto ticket scanning (600k)
-                    + Visitor gift bag (200k) = 1,000k NIS
-                    REVENUE KING: highest total_revenue_NIS
-                    in the scan (+46.7% vs baseline).
+          Combo_B — REVENUE KING: highest total_revenue_NIS
+                    in the scan.
 
-          Combo_C = Popular bands (300k) + Extra photo+art (150k)
-                    + Visitor gift bag (200k) = 650k NIS
-                    SATISFACTION KING: highest avg_satisfaction
-                    in the scan (+31.1% vs baseline).
+          Combo_C — QUEUE KING: shortest avg_queue_length
+                    in the scan.
+
+        See alternatives.COMBO_SPECS for the exact block composition
+        and cost of each combo.
 
         Each combo is simulated with the same number of replications
         as the baseline so the comparisons are fair.

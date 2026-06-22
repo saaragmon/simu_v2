@@ -3,7 +3,7 @@ scan_alternatives.py
 ====================
 Exhaustively evaluate every budget-feasible combination of the 7 alternatives
 (34 combos of size >=2 under 1,000,000 NIS) plus baseline, with 5 replications
-each. Rank by every KPI and print the overall winner.
+each. Report the best combo per KPI.
 """
 
 from __future__ import annotations
@@ -129,32 +129,6 @@ def main():
         print(f"    Cost:          {winner[2]:>12,} NIS")
         print(f"    Value:         {winner[3][kpi]:>12,.3f}")
         print(f"    Δ vs baseline: {delta:+,.3f} ({delta_pct:+.1f}%)")
-
-    # ─── Overall winner: rank-sum across all 5 KPIs ──────────────────────────
-    print('\n' + '=' * 70)
-    print('  OVERALL WINNER (rank-sum across all 3 KPIs, lower = better)')
-    print('=' * 70)
-    rank_sums = {label: 0 for (label, _d, _c, _m) in results}
-    for kpi in KPIS:
-        higher_better = HIGHER_IS_BETTER[kpi]
-        # Sort combos best-to-worst for this KPI
-        sorted_combos = sorted(results,
-                               key=lambda r: r[3][kpi],
-                               reverse=higher_better)
-        for rank, (label, _d, _c, _m) in enumerate(sorted_combos, start=1):
-            rank_sums[label] += rank
-
-    leaderboard = sorted(rank_sums.items(), key=lambda kv: kv[1])
-    print(f"\n  {'Rank':<5}{'Combo':<14}{'Sum-of-Ranks':<14}{'Description'}")
-    for i, (label, total) in enumerate(leaderboard[:10], start=1):
-        descr = next(r[1] for r in results if r[0] == label)
-        cost  = next(r[2] for r in results if r[0] == label)
-        print(f"  {i:<5}{label:<14}{total:<14}{descr}  ({cost:,} NIS)")
-
-    winner_label, _winner_rs = leaderboard[0]
-    winner_row = next(r for r in results if r[0] == winner_label)
-    print(f"\n  >>> RECOMMENDED: {winner_label} = {winner_row[1]} "
-          f"({winner_row[2]:,} NIS) <<<")
 
 
 if __name__ == '__main__':

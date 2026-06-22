@@ -14,12 +14,11 @@ Building blocks (from project spec):
     6. Automatic Ticket Scanning  – 600,000 NIS  (no scan time)
     7. Visitor Gift Bag           – 200,000 NIS  (satisfaction starts at 6.5)
 
-Four scenarios are exposed — one per-KPI winner plus the overall pick:
+Three scenarios are exposed — one per-KPI winner:
 
     Combo_A — Satisfaction king (highest mean avg_satisfaction)
     Combo_B — Revenue king       (highest mean total_revenue_NIS)
     Combo_C — Queue king         (shortest mean avg_queue_length)
-    Combo_D — Overall winner     (best rank-sum across all 3 KPIs)
 
 Each combo is just a list of block ids in `COMBO_SPECS`. Change them
 to re-target the scenarios — cost, description and the SimConfig
@@ -28,7 +27,7 @@ chain are computed automatically by `_build_from_blocks`. Re-running
 `COMBO_SPECS` is the entire update path.
 
 For notebooks: use `KPI_TO_COMBO[kpi]` to ask "which combo is the
-best for KPI X" and `OVERALL_COMBO` for the cross-KPI pick.
+best for KPI X".
 """
 
 from __future__ import annotations
@@ -92,11 +91,6 @@ COMBO_SPECS: Dict[str, Dict] = {
         'optimizes': 'avg_queue_length',
         'tagline':   'Queue king — shortest mean avg_queue_length',
     },
-    'Combo_D': {
-        'blocks':    [4, 6, 7],
-        'optimizes': 'overall',
-        'tagline':   'Overall winner — best rank-sum across all 3 KPIs',
-    },
 }
 
 
@@ -106,16 +100,9 @@ COMBO_SPECS: Dict[str, Dict] = {
 KPI_TO_COMBO: Dict[str, str] = {
     spec['optimizes']: name
     for name, spec in COMBO_SPECS.items()
-    if spec['optimizes'] != 'overall'
 }
 """Map every KPI → the name of the combo that wins it.
 Example: KPI_TO_COMBO['avg_satisfaction'] → 'Combo_A'."""
-
-OVERALL_COMBO: str = next(
-    name for name, spec in COMBO_SPECS.items()
-    if spec['optimizes'] == 'overall'
-)
-"""Name of the combo that wins on the cross-KPI rank-sum."""
 
 
 @dataclass
@@ -179,10 +166,6 @@ def build_combo_b() -> Alternative:
 
 def build_combo_c() -> Alternative:
     return build_combo('Combo_C')
-
-
-def build_combo_d() -> Alternative:
-    return build_combo('Combo_D')
 
 
 # ─── Budget guard ────────────────────────────────────────────────────────────
